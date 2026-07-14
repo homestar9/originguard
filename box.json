@@ -28,7 +28,9 @@
         "test-harness",
 		"/server*.json",
 		"plans",
-		"docs"
+		"docs",
+		"AGENTS.md",
+		"CLAUDE.md"
     ],
 	"scripts":{
 		"build:module":"task run taskFile=build/Build.cfc :projectName=`package show slug` :version=`package show version`",

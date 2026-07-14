@@ -18,6 +18,8 @@ component {
 
 		// Source Excludes Not Added to final binary
 		variables.excludes = [
+			"AGENTS.md",
+			"CLAUDE.md",
 			"build",
 			"docs",
 			"node-modules",
