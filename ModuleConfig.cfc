@@ -43,10 +43,12 @@ component {
 		};
 
 		// Always registered; it no-ops instantly unless protectedModules is configured.
+		// ColdBox appends "@originguard" to the name, so the final registered name is
+		// "OriginFirewall@originguard".
 		interceptors = [
 			{
 				class : "originguard.interceptors.OriginFirewall",
-				name  : "OriginFirewall@originguard"
+				name  : "OriginFirewall"
 			}
 		];
 	}

@@ -48,6 +48,14 @@
 			exclude = []
 		};
 
+		// Module Settings
+		moduleSettings = {
+			// Protect the guinea fixture module so the integration specs have a live target
+			originguard = {
+				protectedModules = [ "guinea" ]
+			}
+		};
+
 		//Register interceptors as an array, we need order
 		interceptors = [
 		];

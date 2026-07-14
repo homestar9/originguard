@@ -8,7 +8,7 @@
  * On a rejected request it stamps the prc and overrides the event to the configured
  * `denialEvent` -- it never aborts or writes to the response itself.
  */
-component extends="coldbox.system.Interceptor" {
+component extends="coldbox.system.Interceptor" accessors="true" {
 
 	// Property declarations must come before any this.* assignment (Adobe throws otherwise).
 	property name="verifier" inject="OriginVerifier@originguard";
