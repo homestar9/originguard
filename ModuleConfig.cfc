@@ -7,7 +7,7 @@ component {
 
 	// Module Properties
 	this.title       = "OriginGuard";
-	this.author      = "David Levin";
+	this.author      = "Angry Sam Productions, Inc.";
 	this.webURL      = "https://github.com/homestar9/originguard";
 	this.description = "Header-based cross-origin (CSRF) protection using the browser's Sec-Fetch-Site and Origin headers. No tokens, no sessions.";
 	this.version     = "@build.version@+@build.number@";
