@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **CI is now tests-only; release automation removed.** This repo inherited the full Ortus module
+  pipeline from its template, but releases here are handled manually (`box run-script release`) for
+  now. Deleted `release.yml` (it fired on every push to `master` and tried to tag, publish to
+  ForgeBox, sync to Ortus's S3 buckets, and Slack Ortus's channel - inert without their secrets, but a
+  hazard the moment a `FORGEBOX_TOKEN` was added), `snapshot.yml` and the `prep_next_release` job (both
+  targeted a `development` branch this fork does not have), and `cron.yml` (a daily scheduled test run).
+  What stays is the part worth keeping: `tests.yml` (the reusable cross-engine matrix) and `pr.yml`,
+  which still run the suite on every push and PR. Given the cross-engine tripwires in AGENTS.md bite
+  silently, automated multi-engine test feedback is the one piece of CI this module genuinely needs.
+
+* **Dependabot turned off.** Deleted `.github/dependabot.yml` and its four open branches. Two of its
+  three ecosystems (`gradle`, `npm`) targeted files that do not exist here and errored silently; the
+  third only bumped GitHub Action versions, which are pinned and can be updated by hand when needed.
+
 ## [2.1.0] => 2026-JUL-14
 
 OriginGuard now strips a forged `_method` before anything reads the HTTP verb. Purely additive: no
