@@ -9,6 +9,7 @@
 	"bugs" : "https://github.com/homestar9/originguard/issues",
 	"shortDescription"	: "Header-based cross-origin (CSRF) protection for ColdBox apps using the browser's Sec-Fetch-Site and Origin headers. No tokens, no sessions.",
 	"slug"		: "originguard",
+    "packageDirectory": "originguard",
 	"type"		: "modules",
 	"keywords":"csrf,security,cross-origin,sec-fetch-site,origin,coldbox,interceptor",
 	"license"			: [
