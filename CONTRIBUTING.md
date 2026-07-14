@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Hola amigo! I'm really excited that you are interested in contributing to @MODULE_NAME@. Before submitting your contribution, please make sure to take a moment and read through the following guidelines:
+Hola amigo! I'm really excited that you are interested in contributing to OriginGuard. Before submitting your contribution, please make sure to take a moment and read through the following guidelines:
 
 - [Code Of Conduct](#code-of-conduct)
 - [Bug Reporting](#bug-reporting)
@@ -66,7 +66,8 @@ If you discover a security vulnerability, please send an email to the Ortus secu
 Please make sure your code runs on the following CFML Engines:
 
 - Lucee 5+
-- Adobe ColdFusion 2018+
+- Adobe ColdFusion 2023+
+- BoxLang 1+
 
 ## Coding Styles & Formatting
 
@@ -98,11 +99,11 @@ You can support ColdBox and all of our Open Source initiatives at Ortus Solution
 
 ## Contributors
 
-Thank you to all the people who have already contributed to @MODULE_NAME@! We :heart: :heart: :heart: love you!
+Thank you to all the people who have already contributed to OriginGuard! We :heart: :heart: :heart: love you!
 
 
-<a href = "https://github.com/coldbox-modules/@module_name@/graphs/contributors">
-  <img src = "https://contrib.rocks/image?repo=coldbox-modules/@module_name@"/>
+<a href = "https://github.com/homestar9/originguard/graphs/contributors">
+  <img src = "https://contrib.rocks/image?repo=homestar9/originguard" alt = "OriginGuard contributors"/>
 </a>
 
 Made with [contributors-img](https://contrib.rocks)

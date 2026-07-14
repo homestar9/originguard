@@ -19,7 +19,9 @@ component {
 		// Source Excludes Not Added to final binary
 		variables.excludes = [
 			"build",
+			"docs",
 			"node-modules",
+			"plans",
 			"resources",
 			"test-harness",
 			"(package|package-lock).json",

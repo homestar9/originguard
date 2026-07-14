@@ -1,5 +1,5 @@
 {
-    "name":"@MODULE_NAME@-lucee@5",
+    "name":"originguard-lucee@5",
     "app":{
         "serverHomeDirectory":".engine/lucee5",
         "cfengine":"lucee@5"
@@ -11,17 +11,17 @@
         "rewrites":{
             "enable":"true"
         },
-		"webroot": "test-harness",
-		"aliases":{
-            "/moduleroot/@MODULE_NAME@":"../"
+        "webroot":"test-harness",
+        "aliases":{
+            "/moduleroot/originguard":"../"
         }
     },
-	"JVM":{
+    "JVM":{
         "heapSize":"768",
         "javaVersion":"openjdk11_jre"
     },
     "openBrowser":"false",
-	"cfconfig": {
-		"file" : ".cfconfig.json"
-	}
+    "cfconfig":{
+        "file":".cfconfig.json"
+    }
 }

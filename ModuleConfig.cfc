@@ -6,42 +6,38 @@
 component {
 
 	// Module Properties
-	this.title 				= "@MODULE_NAME@";
-	this.author 			= "Ortus Solutions";
-	this.webURL 			= "https://www.ortussolutions.com";
-	this.description 		= "@MODULE_DESCRIPTION@";
-	this.version 			= "@build.version@+@build.number@";
+	this.title       = "OriginGuard";
+	this.author      = "David Levin";
+	this.webURL      = "https://github.com/homestar9/originguard";
+	this.description = "Header-based cross-origin (CSRF) protection using the browser's Sec-Fetch-Site and Origin headers. No tokens, no sessions.";
+	this.version     = "@build.version@+@build.number@";
 
 	// Model Namespace
-	this.modelNamespace		= "@MODULE_SLUG@";
+	this.modelNamespace = "originguard";
 
 	// CF Mapping
-	this.cfmapping			= "@MODULE_SLUG@";
+	this.cfmapping = "originguard";
 
 	// Dependencies
-	this.dependencies 		= [];
+	this.dependencies = [];
 
 	/**
 	 * Configure Module
 	 */
 	function configure(){
-		settings = {
-
-		};
+		settings = {};
 	}
 
 	/**
 	 * Fired when the module is registered and activated.
 	 */
 	function onLoad(){
-
 	}
 
 	/**
 	 * Fired when the module is unregistered and unloaded
 	 */
 	function onUnload(){
-
 	}
 
 }

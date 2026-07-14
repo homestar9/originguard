@@ -15,7 +15,7 @@ If you are about to append a paragraph to this file, you are almost certainly in
 
 ## What this is
 
-[tbd]
+**OriginGuard** is a standalone ColdBox module that provides modern, stateless CSRF protection by validating browser-controlled request headers such as Sec-Fetch-Site, Origin, and Referer. It replaces traditional session-based CSRF tokens, hidden form fields, and client-side token refresh logic with a reusable origin-verification service that can protect unsafe HTTP requests, support explicitly trusted cross-origin callers, and account for trusted reverse proxies while remaining compatible with non-browser and automated clients.
 
 ## Engine support
 
