@@ -70,16 +70,40 @@ component extends="testbox.system.BaseSpec" {
 				expect( verdict.reason ).toBe( "allowlist" );
 			} );
 
-			it( "matches allowlist entries case-insensitively and ignores scheme/path/default port", function(){
+			it( "matches bare-host allowlist entries case-insensitively, ignoring path and default port", function(){
 				var verdict = decide(
 					requestHeaders = {
 						"secFetchSite" : "cross-site",
 						"origin"       : "https://Partner.Example.org:443"
 					},
-					moduleConfig = { "allowedOrigins" : [ "HTTP://partner.example.org/some/path" ] }
+					moduleConfig = { "allowedOrigins" : [ "Partner.Example.org/some/path" ] }
 				);
 				expect( verdict.allowed ).toBeTrue();
 				expect( verdict.reason ).toBe( "allowlist" );
+			} );
+
+			it( "pins the scheme when an allowlist entry includes one (Go AddTrustedOrigin behavior)", function(){
+				var pinnedConfig = { "allowedOrigins" : [ "https://partner.example.org" ] };
+				var httpsVerdict = decide(
+					requestHeaders = {
+						"secFetchSite" : "cross-site",
+						"origin"       : "https://partner.example.org"
+					},
+					moduleConfig = pinnedConfig
+				);
+				expect( httpsVerdict.allowed ).toBeTrue();
+				expect( httpsVerdict.reason ).toBe( "allowlist" );
+
+				// The http:// twin of a pinned https:// entry gets NO allowlist power.
+				var httpVerdict = decide(
+					requestHeaders = {
+						"secFetchSite" : "cross-site",
+						"origin"       : "http://partner.example.org"
+					},
+					moduleConfig = pinnedConfig
+				);
+				expect( httpVerdict.allowed ).toBeFalse();
+				expect( httpVerdict.reason ).toBe( "sec-fetch-site:cross-site" );
 			} );
 
 			it( "does NOT give the request's own host allowlist power over Sec-Fetch-Site", function(){
@@ -185,6 +209,22 @@ component extends="testbox.system.BaseSpec" {
 				);
 				expect( verdict.allowed ).toBeTrue();
 			} );
+
+			it( "matches a schemeful allowlist entry by Referer, ignoring the path", function(){
+				var pinnedConfig = { "allowedOrigins" : [ "https://partner.example.org" ] };
+				expect(
+					decide(
+						requestHeaders = { "referer" : "https://partner.example.org/some/form" },
+						moduleConfig   = pinnedConfig
+					).allowed
+				).toBeTrue();
+				expect(
+					decide(
+						requestHeaders = { "referer" : "http://partner.example.org/some/form" },
+						moduleConfig   = pinnedConfig
+					).allowed
+				).toBeFalse();
+			} );
 		} );
 
 		describe( "Step 5: no browser signal at all", function(){
@@ -202,19 +242,21 @@ component extends="testbox.system.BaseSpec" {
 		} );
 
 		describe( "getAllowedOrigins(): allowlist normalization", function(){
-			it( "lowercases, strips schemes/paths/default ports, and drops blanks", function(){
+			it( "lowercases, strips paths/default ports, keeps explicit schemes, drops blanks", function(){
 				var normalized = variables.verifier.getAllowedOrigins( {
 					"allowedOrigins" : [
 						" HTTPS://Partner.Example.org/ ",
 						"",
 						"http://other.example.org:443/deep/path",
-						"api.example.org:8443"
+						"api.example.org:8443",
+						"Plain.Example.org/"
 					]
 				} );
 				expect( normalized ).toBe( [
-					"partner.example.org",
-					"other.example.org",
-					"api.example.org:8443"
+					"https://partner.example.org",
+					"http://other.example.org",
+					"api.example.org:8443",
+					"plain.example.org"
 				] );
 			} );
 

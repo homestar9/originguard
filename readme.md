@@ -86,6 +86,26 @@ Protection is deliberately OFF until you write this config line. OriginGuard is 
 transitively by modules that use it in service mode, and a dependency must never start blocking
 requests in your app by itself. One line, you choose the scope, and `"*"` gives you everything.
 
+### Safe rollout (recommended)
+
+Follow the staged deployment the [Fetch Metadata guidance](https://web.dev/articles/fetch-metadata)
+recommends - observe first, then enforce:
+
+```cfc
+// Phase 1: protect everything, but only LOG what would be blocked
+moduleSettings = {
+    originguard = {
+        protectedModules = [ "*" ],
+        mode             = "monitor"
+    }
+};
+```
+
+Run that for a few days and watch your logs for `OriginGuard monitor:` warnings. Legitimate
+cross-site flows will show up here - SAML SSO posts, payment-gateway returns, embedded widgets.
+Add those senders to `allowedOrigins` (or their modules to `excludedModules`), then flip
+`mode = "block"`. Nothing breaks while you learn what your traffic really looks like.
+
 ### Custom denial page
 
 Point `denialEvent` at your own handler to control what a blocked user sees:
@@ -134,7 +154,8 @@ moduleSettings = {
     originguard = {
         // Master switch. OFF means ZERO cross-origin protection from this module.
         enabled          = true,
-        // Trusted cross-origin callers (host or host:port). Empty = only your own host.
+        // Trusted cross-origin callers. "partner.com" trusts both schemes;
+        // "https://partner.com" pins the scheme (recommended). Empty = only your own host.
         allowedOrigins   = [],
         // Honour X-Forwarded-Host. Only turn on behind a Host-rewriting reverse proxy.
         trustUpstream    = false,
@@ -145,6 +166,8 @@ moduleSettings = {
         excludedModules  = [],
         // Interceptor mode: verbs that never need a check.
         safeMethods      = "GET,HEAD,OPTIONS",
+        // Interceptor mode: "block" enforces, "monitor" only logs would-be blocks.
+        mode             = "block",
         // Interceptor mode: where a blocked request lands.
         denialEvent      = "originguard:errors.onBlocked"
     }
@@ -153,10 +176,11 @@ moduleSettings = {
 
 ## Things worth knowing
 
-- **Allowlist entries are scheme-blind and beat `Sec-Fetch-Site`.** `allowedOrigins` entries are
-  compared as `host[:port]` with the scheme ignored (so TLS-terminating proxies need no special
-  config), and a match is trusted even when the browser reports `cross-site`. Practical rule:
-  only allowlist hosts you would trust over plain `http`.
+- **Allowlist entries beat `Sec-Fetch-Site`, so pin their scheme.** An allowlisted origin is
+  trusted even when the browser reports `cross-site`. Write entries WITH a scheme
+  (`"https://partner.com"`) so only that exact origin gets the power - the same behavior as
+  Go's `AddTrustedOrigin`. A bare `"partner.com"` trusts both `http` and `https`; only use
+  that form for hosts you would trust over plain `http`.
 - **Behind a reverse proxy** that rewrites the `Host` header, set `trustUpstream = true` so the
   verifier compares against `X-Forwarded-Host` (first entry, when proxies chain) instead of the
   internal host. Only do this when a proxy you control sets that header, because clients can send

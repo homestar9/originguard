@@ -58,6 +58,14 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 			return;
 		}
 
+		// Monitor mode (the web.dev staged rollout): log what WOULD be blocked, let it through.
+		// Run this for a while, add allowedOrigins/excludedModules for what shows up, then
+		// switch to block.
+		if ( config.mode == "monitor" ) {
+			log.warn( "OriginGuard monitor: would block '#targetEvent#' (#verdict.reason#)" );
+			return;
+		}
+
 		// Rejected: record what was blocked and why, then hand off to the denial renderer.
 		arguments.prc[ "originBlockedEvent" ] = targetEvent;
 		arguments.prc[ "originBlockReason" ]  = verdict.reason;
@@ -76,6 +84,7 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 			"protectedModules" : [],
 			"excludedModules"  : [],
 			"safeMethods"      : "GET,HEAD,OPTIONS",
+			"mode"             : "block",
 			"denialEvent"      : "originguard:errors.onBlocked"
 		};
 		for ( var key in config ) {
@@ -93,6 +102,8 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 		if ( !isArray( config.excludedModules ) ) {
 			config.excludedModules = listToArray( config.excludedModules );
 		}
+		// Anything that is not explicitly "monitor" enforces (fail closed on typos).
+		config.mode = lCase( trim( config.mode ) ) == "monitor" ? "monitor" : "block";
 		return config;
 	}
 

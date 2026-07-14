@@ -28,7 +28,8 @@ component {
 		variables.settings = {
 			// Master switch. OFF means ZERO cross-origin protection from this module.
 			enabled          : true,
-			// Trusted cross-origin callers (host[:port], scheme ignored). Empty = own host only.
+			// Trusted cross-origin callers. "partner.com" trusts both schemes;
+			// "https://partner.com" pins the scheme (recommended). Empty = own host only.
 			allowedOrigins   : [],
 			// Honour X-Forwarded-Host (only turn on behind a Host-rewriting reverse proxy).
 			trustUpstream    : false,
@@ -43,6 +44,9 @@ component {
 			excludedModules  : [],
 			// Interceptor mode: HTTP verbs that never need a check.
 			safeMethods      : "GET,HEAD,OPTIONS",
+			// Interceptor mode: "block" enforces; "monitor" only logs what WOULD be blocked.
+			// Roll out safely: monitor first, watch the logs, then switch to block.
+			mode             : "block",
 			// Interceptor mode: where a blocked request lands. Point this at your own handler
 			// to render a custom denial page.
 			denialEvent      : "originguard:errors.onBlocked"

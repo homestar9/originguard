@@ -29,6 +29,7 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				variables.firewall.getSettings()[ "denialEvent" ] = "originguard:errors.onBlocked";
 				variables.firewall.getSettings()[ "protectedModules" ] = [ "guinea" ];
 				variables.firewall.getSettings()[ "excludedModules" ] = [];
+				variables.firewall.getSettings()[ "mode" ] = "block";
 			} );
 
 			it( "sees the host's moduleSettings overrides (config actually merged)", function(){
@@ -123,6 +124,14 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				var result = execute( event = "errors.onOops", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
 				expect( result.getRenderedContent() ).toInclude( "root error page" );
+			} );
+
+			it( "logs instead of blocking in monitor mode (staged rollout)", function(){
+				variables.firewall.getSettings()[ "mode" ] = "monitor";
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:main.save", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
 			} );
 
 			it( "routes a rejection to a consumer-configured denialEvent", function(){

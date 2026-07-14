@@ -28,8 +28,14 @@ server-to-server calls are not CSRF vectors).
   `[ "*" ]` is the recommended config; the default stays empty so a transitive install (a
   module using service mode) never changes host behavior by itself.
 * Default `originguard:errors.onBlocked` denial handler - a self-contained 403 (JSON for AJAX).
+* Monitor mode (`mode = "monitor"`): logs what WOULD be blocked without enforcing, enabling the
+  staged rollout the web.dev Fetch Metadata guidance recommends (monitor, tune, then block).
+  Unknown mode values fail closed to `block`.
+* Schemeful allowlist entries: `"https://partner.com"` pins the exact origin (Go's
+  `AddTrustedOrigin` behavior); bare `"partner.com"` stays scheme-blind for
+  TLS-terminating-proxy setups.
 * Settings: `enabled`, `allowedOrigins`, `trustUpstream`, `protectedModules`, `excludedModules`,
-  `safeMethods`, `denialEvent`. See the readme for the full contract.
+  `safeMethods`, `mode`, `denialEvent`. See the readme for the full contract.
 
 ### Design notes (deviations from the original handoff spec, all deliberate)
 

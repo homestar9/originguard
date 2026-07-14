@@ -62,7 +62,7 @@ component singleton {
 		//    hostile Sec-Fetch-Site. Only the configured list gets this power; the request's own
 		//    host waits until step 3 (below Sec-Fetch-Site), or its scheme-ignoring match would
 		//    reopen the http->https hole that Sec-Fetch-Site closes.
-		if ( len( asserted ) && isInList( allowedList, normalizeOrigin( asserted ) ) ) {
+		if ( len( asserted ) && matchesList( asserted, allowedList ) ) {
 			return { "allowed" : true, "reason" : "allowlist" };
 		}
 
@@ -152,12 +152,30 @@ component singleton {
 		required string requestHost
 	){
 		var effectiveList = listAppend( arguments.allowedList, arguments.requestHost );
-		return isInList( effectiveList, normalizeOrigin( arguments.challenger ) );
+		return matchesList( arguments.challenger, effectiveList );
 	}
 
 	/**
-	 * Normalize the configured allowedOrigins array into a comma list of host[:port] entries.
-	 * Blank or non-array input yields an empty list (nothing extra is trusted).
+	 * Does a raw Origin/Referer value match any entry in a normalized list? Checked two ways:
+	 * as a bare host (matches scheme-blind entries and the request's own host) and as a full
+	 * scheme://host origin (matches schemeful entries, which only trust that exact scheme).
+	 *
+	 * @challenger The raw header value to test.
+	 * @list       Comma list of normalized entries (bare hosts and/or schemeful origins).
+	 */
+	private boolean function matchesList( required string challenger, required string list ){
+		if ( isInList( arguments.list, normalizeOrigin( arguments.challenger ) ) ) {
+			return true;
+		}
+		var fullOrigin = normalizeOriginEntry( arguments.challenger );
+		return find( "://", fullOrigin ) && isInList( arguments.list, fullOrigin );
+	}
+
+	/**
+	 * Normalize the configured allowedOrigins array into a comma list. Entries without a
+	 * scheme become bare host[:port] (scheme-blind); entries with one stay schemeful and only
+	 * trust that exact scheme. Blank or non-array input yields an empty list (nothing extra
+	 * is trusted).
 	 *
 	 * @config Struct that may contain allowedOrigins:array.
 	 */
@@ -165,13 +183,37 @@ component singleton {
 		var normalizedList = "";
 		if ( structKeyExists( arguments.config, "allowedOrigins" ) && isArray( arguments.config.allowedOrigins ) ) {
 			for ( var entry in arguments.config.allowedOrigins ) {
-				var normalized = normalizeOrigin( entry );
+				var normalized = normalizeOriginEntry( entry );
 				if ( len( normalized ) ) {
 					normalizedList = listAppend( normalizedList, normalized );
 				}
 			}
 		}
 		return normalizedList;
+	}
+
+	/**
+	 * Normalize an allowlist entry or raw header value, preserving an explicit scheme. With a
+	 * scheme ("https://partner.com/") the result is "scheme://host[:port]" and will only ever
+	 * match that exact scheme -- the same behavior as Go's AddTrustedOrigin. Without one, it
+	 * falls back to the scheme-blind bare-host normalization.
+	 *
+	 * @value A raw origin, referer, or configured entry.
+	 */
+	private string function normalizeOriginEntry( required string value ){
+		var normalized = lCase( trim( arguments.value ) );
+		// Only a well-formed "scheme://" prefix counts as schemeful; anything else is a host.
+		if ( !reFind( "^[a-z][a-z0-9\+\-\.]*://", normalized ) ) {
+			return normalizeOrigin( normalized );
+		}
+		var scheme   = listFirst( normalized, ":" );
+		var hostPart = reReplace( normalized, "^[a-z][a-z0-9\+\-\.]*://", "" );
+		hostPart     = listFirst( hostPart, "/" );
+		hostPart     = reReplace( hostPart, ":(80|443)$", "" );
+		if ( !len( hostPart ) ) {
+			return "";
+		}
+		return scheme & "://" & hostPart;
 	}
 
 	/**
