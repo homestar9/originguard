@@ -21,11 +21,15 @@ server-to-server calls are not CSRF vectors).
 * `OriginVerifier@originguard` - the pure, stateless decision engine. `verify( event, config )`
   for ColdBox events, `evaluateHeaders( headers, config, requestHost )` for anything else.
 * `OriginFirewall` interceptor - turnkey enforcement. Always registered, dormant until the host
-  configures `protectedModules`. Handles `_method` verb-spoofing, exempts `:errors.` events, and
-  routes rejections to a configurable `denialEvent`.
+  configures `protectedModules`. Handles `_method` verb-spoofing, exempts `errors` handlers
+  (module and root), and routes rejections to a configurable `denialEvent`.
+* Scope tokens: `protectedModules` accepts `"*"` (everything, root app included) and `"/"`
+  (root events only) alongside module names, plus an `excludedModules` setting for carve-outs.
+  `[ "*" ]` is the recommended config; the default stays empty so a transitive install (a
+  module using service mode) never changes host behavior by itself.
 * Default `originguard:errors.onBlocked` denial handler - a self-contained 403 (JSON for AJAX).
-* Settings: `enabled`, `allowedOrigins`, `trustUpstream`, `protectedModules`, `safeMethods`,
-  `denialEvent`. See the readme for the full contract.
+* Settings: `enabled`, `allowedOrigins`, `trustUpstream`, `protectedModules`, `excludedModules`,
+  `safeMethods`, `denialEvent`. See the readme for the full contract.
 
 ### Design notes (deviations from the original handoff spec, all deliberate)
 

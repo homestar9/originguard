@@ -48,20 +48,43 @@ box install originguard
 
 ## Quick start: interceptor mode (turnkey)
 
-Tell OriginGuard which of your app's modules to protect. That is the whole setup:
+Tell OriginGuard what to protect. For most apps the answer is "everything", and that is one line:
 
 ```cfc
 // config/Coldbox.cfc
 moduleSettings = {
     originguard = {
-        protectedModules = [ "myapp", "admin" ]
+        protectedModules = [ "*" ]
     }
 };
 ```
 
-From then on, every unsafe request to an event inside those modules is verified. Rejected
-requests get a 403 from a small built-in page (JSON if the request is AJAX). Events matching
-`:errors.` are never intercepted, so your error pages always render.
+From then on, every unsafe request is verified. Rejected requests get a 403 from a small
+built-in page (JSON if the request is AJAX). Events on an `errors` handler are never
+intercepted, so your error pages always render.
+
+`protectedModules` takes module names plus two reserved tokens:
+
+| Entry | Protects |
+| --- | --- |
+| `"*"` | Everything: the root app and every module |
+| `"/"` | Root (non-module) events only |
+| `"admin"` | Events inside the `admin` module only |
+
+Need carve-outs from a `"*"` scope? Use `excludedModules` (exclusions always win):
+
+```cfc
+moduleSettings = {
+    originguard = {
+        protectedModules = [ "*" ],
+        excludedModules  = [ "cbdebugger" ]
+    }
+};
+```
+
+Protection is deliberately OFF until you write this config line. OriginGuard is also installed
+transitively by modules that use it in service mode, and a dependency must never start blocking
+requests in your app by itself. One line, you choose the scope, and `"*"` gives you everything.
 
 ### Custom denial page
 
@@ -115,8 +138,11 @@ moduleSettings = {
         allowedOrigins   = [],
         // Honour X-Forwarded-Host. Only turn on behind a Host-rewriting reverse proxy.
         trustUpstream    = false,
-        // Interceptor mode: module prefixes to protect. Empty = interceptor does nothing.
+        // Interceptor mode: module names, "*" (everything), and/or "/" (root events).
+        // Empty = interceptor does nothing. [ "*" ] is the recommended config.
         protectedModules = [],
+        // Interceptor mode: carve-outs from the scope above ("/" = root). Exclusions win.
+        excludedModules  = [],
         // Interceptor mode: verbs that never need a check.
         safeMethods      = "GET,HEAD,OPTIONS",
         // Interceptor mode: where a blocked request lands.
@@ -142,6 +168,10 @@ moduleSettings = {
   HTTP verb and ColdBox's view of it (which `_method=PUT` style spoofing changes) are safe.
 - **Old browsers still work.** No `Sec-Fetch-Site` means the `Origin`/`Referer` fallbacks apply.
   A same-origin form post from a 2015 browser carries at least a `Referer` on your own host.
+- **Legitimate cross-site POSTs need an allowlist entry.** Some flows deliver a browser POST
+  from another site on purpose: SAML SSO (the IdP posts the assertion to you), 3-D Secure
+  payment returns, embedded widgets. Under `protectedModules = [ "*" ]` those will 403 unless
+  you add the sender to `allowedOrigins` or exclude that module.
 
 ## Contributing and tests
 

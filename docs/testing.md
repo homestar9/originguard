@@ -34,7 +34,10 @@ the callee's parameter names is a Lucee tripwire (see AGENTS.md).
 ## Writing an integration spec
 
 The harness protects a fixture module named `guinea` (`test-harness/modules_app/guinea/`) via
-`moduleSettings.originguard.protectedModules` in `test-harness/config/Coldbox.cfc`. To simulate a
+`moduleSettings.originguard.protectedModules` in `test-harness/config/Coldbox.cfc`. The harness
+root app also has a `handlers/Errors.cfc` fixture proving the errors exemption covers root
+events; specs for the `"*"` / `"/"` scope tokens flip the live settings and restore them in
+`afterEach`. To simulate a
 browser, mock the request context's header reads and verb, then run the event:
 
 ```cfc

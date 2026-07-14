@@ -25,16 +25,22 @@ component {
 	 * Configure Module
 	 */
 	function configure(){
-		settings = {
+		variables.settings = {
 			// Master switch. OFF means ZERO cross-origin protection from this module.
 			enabled          : true,
 			// Trusted cross-origin callers (host[:port], scheme ignored). Empty = own host only.
 			allowedOrigins   : [],
 			// Honour X-Forwarded-Host (only turn on behind a Host-rewriting reverse proxy).
 			trustUpstream    : false,
-			// Interceptor mode: module prefixes whose unsafe events get checked. Empty = the
-			// interceptor does nothing, which is the safe default for service-mode consumers.
+			// Interceptor mode: what to protect. Module names, plus two reserved tokens:
+			// "*" = every event (root app included) and "/" = root (non-module) events only.
+			// [ "*" ] is the recommended config for apps. Empty = the interceptor does nothing,
+			// which keeps a transitive install (a dependency using service mode) from silently
+			// changing the host app's behavior.
 			protectedModules : [],
+			// Interceptor mode: carve-outs from the scope above. Module names, or "/" for the
+			// root app. Exclusions always win.
+			excludedModules  : [],
 			// Interceptor mode: HTTP verbs that never need a check.
 			safeMethods      : "GET,HEAD,OPTIONS",
 			// Interceptor mode: where a blocked request lands. Point this at your own handler

@@ -41,9 +41,15 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 			return;
 		}
 
-		// Scope: only events inside the configured module prefixes, never error renderers.
+		// Scope: only events inside the configured protection scope, never error renderers.
 		var targetEvent = arguments.event.getCurrentEvent();
-		if ( !isProtectedEvent( targetEvent, config.protectedModules ) ) {
+		if (
+			!isProtectedEvent(
+				targetEvent,
+				config.protectedModules,
+				config.excludedModules
+			)
+		) {
 			return;
 		}
 
@@ -68,6 +74,7 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 			"allowedOrigins"   : [],
 			"trustUpstream"    : false,
 			"protectedModules" : [],
+			"excludedModules"  : [],
 			"safeMethods"      : "GET,HEAD,OPTIONS",
 			"denialEvent"      : "originguard:errors.onBlocked"
 		};
@@ -83,6 +90,9 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 		if ( !isArray( config.protectedModules ) ) {
 			config.protectedModules = listToArray( config.protectedModules );
 		}
+		if ( !isArray( config.excludedModules ) ) {
+			config.excludedModules = listToArray( config.excludedModules );
+		}
 		return config;
 	}
 
@@ -97,35 +107,57 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 	}
 
 	/**
-	 * Does this event live inside one of the protected module prefixes? Error renderers
-	 * (anything matching ":errors.") are always exempt so we never block a denial page --
-	 * including our own after an overrideEvent.
+	 * Does this event fall inside the protected scope? Scope entries are module names, plus
+	 * two reserved tokens no real module can be named: "*" (every event, root app included)
+	 * and "/" (root events only -- those with no module prefix). Exclusions always win.
 	 *
-	 * @targetEvent      The current event name, e.g. "myapp:content.save".
-	 * @protectedModules Array of module name prefixes.
+	 * Error renderers (any handler named "errors", module or root) are always exempt so we
+	 * never block a denial page -- including our own after an overrideEvent.
+	 *
+	 * @targetEvent      The current event name, e.g. "myapp:content.save" or "content.save".
+	 * @protectedModules Array of module names and/or the "*" / "/" tokens.
+	 * @excludedModules  Array of module names ("/" = the root app) carved out of the scope.
 	 */
-	private boolean function isProtectedEvent( required string targetEvent, required array protectedModules ){
-		if ( reFindNoCase( ":errors\.", arguments.targetEvent ) ) {
+	private boolean function isProtectedEvent(
+		required string targetEvent,
+		required array protectedModules,
+		required array excludedModules
+	){
+		if ( reFindNoCase( "(^|:)errors\.", arguments.targetEvent ) ) {
 			return false;
 		}
-		var prefixes = [];
-		for ( var moduleName in arguments.protectedModules ) {
-			// Strip blanks and a tolerated trailing colon, dedupe, and escape regex specials.
-			var cleaned = reReplace( trim( moduleName ), ":$", "" );
-			cleaned     = reReplace(
-				cleaned,
-				"([.\(\)\[\]\+\*\?\^\$\|\\])",
-				"\\\1",
-				"all"
-			);
-			if ( len( cleaned ) && !arrayFindNoCase( prefixes, cleaned ) ) {
-				arrayAppend( prefixes, cleaned );
+
+		// The event's module is everything before the first colon; root events have none and
+		// are represented by the "/" token from here on.
+		var scopeKey = "/";
+		if ( listLen( arguments.targetEvent, ":" ) > 1 ) {
+			scopeKey = trim( listFirst( arguments.targetEvent, ":" ) );
+		}
+
+		if ( isInScope( scopeKey, arguments.excludedModules ) ) {
+			return false;
+		}
+		if ( isInScope( "*", arguments.protectedModules ) ) {
+			return true;
+		}
+		return isInScope( scopeKey, arguments.protectedModules );
+	}
+
+	/**
+	 * Is this scope key (a module name, or "/" for the root app) present in a configured
+	 * scope list? Entries are trimmed and tolerate a trailing colon.
+	 *
+	 * @moduleKey The module name to look for, or "/" for root events, or the "*" token.
+	 * @scopeList Array of configured module names / tokens.
+	 */
+	private boolean function isInScope( required string moduleKey, required array scopeList ){
+		for ( var entry in arguments.scopeList ) {
+			var cleaned = reReplace( trim( entry ), ":$", "" );
+			if ( len( cleaned ) && cleaned == arguments.moduleKey ) {
+				return true;
 			}
 		}
-		if ( !arrayLen( prefixes ) ) {
-			return false;
-		}
-		return reFindNoCase( "^(" & arrayToList( prefixes, "|" ) & "):", arguments.targetEvent ) > 0;
+		return false;
 	}
 
 }

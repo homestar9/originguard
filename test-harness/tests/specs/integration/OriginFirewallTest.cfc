@@ -27,6 +27,8 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				variables.firewall.getSettings()[ "enabled" ] = true;
 				variables.firewall.getSettings()[ "allowedOrigins" ] = [];
 				variables.firewall.getSettings()[ "denialEvent" ] = "originguard:errors.onBlocked";
+				variables.firewall.getSettings()[ "protectedModules" ] = [ "guinea" ];
+				variables.firewall.getSettings()[ "excludedModules" ] = [];
 			} );
 
 			it( "sees the host's moduleSettings overrides (config actually merged)", function(){
@@ -89,6 +91,38 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				var result = execute( event = "guinea:main.save", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
 				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
+			} );
+
+			it( "protects root (non-module) events when '/' is in scope", function(){
+				variables.firewall.getSettings()[ "protectedModules" ] = [ "/" ];
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "main.index", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "main.index" );
+				expect( result.getRenderedContent() ).toInclude( "Request Blocked" );
+			} );
+
+			it( "protects everything, root included, when '*' is in scope", function(){
+				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "main.index", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "main.index" );
+			} );
+
+			it( "honours excludedModules carve-outs from a '*' scope", function(){
+				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
+				variables.firewall.getSettings()[ "excludedModules" ] = [ "guinea" ];
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:main.save", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
+			} );
+
+			it( "exempts a root-app errors handler even under '*'", function(){
+				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "errors.onOops", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "root error page" );
 			} );
 
 			it( "routes a rejection to a consumer-configured denialEvent", function(){
