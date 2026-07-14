@@ -131,7 +131,11 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				) {
 					// Adobe refuses a POST with zero params; a form field does not add any
 					// origin headers, so the request still looks like curl to the firewall.
-					cfhttpparam( type = "formfield", name = "dummy", value = "1" );
+					cfhttpparam(
+						type  = "formfield",
+						name  = "dummy",
+						value = "1"
+					);
 				}
 				expect( listFirst( httpResult.statusCode, " " ) ).toBe( "200" );
 				expect( httpResult.fileContent ).toInclude( "guinea saved" );
