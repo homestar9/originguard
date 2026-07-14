@@ -1,4 +1,5 @@
 # OriginGuard
+![OriginGuard Logo](https://github.com/homestar9/originguard/blob/master/originguard-logo.avif?raw=true)
 
 Modern, stateless CSRF protection for ColdBox applications. No tokens, no hidden form fields, no
 session storage.
