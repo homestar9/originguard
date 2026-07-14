@@ -5,8 +5,8 @@ session storage.
 
 OriginGuard decides whether a state-changing request really came from your own site by reading the
 headers the **browser itself** attaches to every request (`Sec-Fetch-Site`, `Origin`, `Referer`).
-This is the same algorithm Go 1.25 ships as `http.CrossOriginProtection`, designed by Filippo
-Valsorda. Because the browser controls these headers (an attacking page cannot forge them), a
+This is the same algorithm Go 1.25 ships as `http.CrossOriginProtection`, designed by [Filippo
+Valsorda](https://words.filippo.io/csrf/). Because the browser controls these headers (an attacking page cannot forge them), a
 simple header check replaces the whole token dance.
 
 ## Why not tokens?
