@@ -33,12 +33,20 @@ the callee's parameter names is a Lucee tripwire (see AGENTS.md).
 
 ## Writing an integration spec
 
-The harness protects a fixture module named `guinea` (`test-harness/modules_app/guinea/`) via
-`moduleSettings.originguard.protectedModules` in `test-harness/config/Coldbox.cfc`. The harness
-root app also has a `handlers/Errors.cfc` fixture proving the errors exemption covers root
-events; specs for the `"*"` / `"/"` scope tokens flip the live settings and restore them in
-`afterEach`. To simulate a
-browser, mock the request context's header reads and verb, then run the event:
+The harness runs with the module's real shipping defaults (`secureList = "*"`, `whiteList = ""`),
+written out explicitly in `moduleSettings.originguard` in `test-harness/config/Coldbox.cfc` so the
+specs prove the default rather than assume it. The fixtures the scope specs aim at:
+
+| Fixture | Why it exists |
+| --- | --- |
+| `modules_app/guinea/handlers/Main.cfc` (`save`) | The ordinary protected action. |
+| `modules_app/guinea/handlers/Api.cfc` (`webhook`) | A second handler in the same module, so a `whiteList` pattern can carve out ONE action and the specs can still prove `guinea:main.save` stays protected. |
+| `modules_app/guinea/handlers/Errors.cfc` | A module-level errors handler, proving the errors exemption. |
+| `handlers/Errors.cfc` (root) | The same exemption for root events. |
+
+Specs that scope the firewall flip the live settings (`secureList` / `whiteList`) and restore them
+in `afterEach`. To simulate a browser, mock the request context's header reads and verb, then run
+the event:
 
 ```cfc
 var oEvent = prepareMock( getRequestContext() );

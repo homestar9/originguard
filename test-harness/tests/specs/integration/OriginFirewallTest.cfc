@@ -27,13 +27,13 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				variables.firewall.getSettings()[ "enabled" ] = true;
 				variables.firewall.getSettings()[ "allowedOrigins" ] = [];
 				variables.firewall.getSettings()[ "denialEvent" ] = "originguard:errors.onBlocked";
-				variables.firewall.getSettings()[ "protectedModules" ] = [ "guinea" ];
-				variables.firewall.getSettings()[ "excludedModules" ] = [];
+				variables.firewall.getSettings()[ "secureList" ] = "*";
+				variables.firewall.getSettings()[ "whiteList" ] = "";
 				variables.firewall.getSettings()[ "mode" ] = "block";
 			} );
 
 			it( "sees the host's moduleSettings overrides (config actually merged)", function(){
-				expect( variables.firewall.getSettings().protectedModules ).toBe( [ "guinea" ] );
+				expect( variables.firewall.getSettings().secureList ).toBe( "*" );
 			} );
 
 			it( "blocks a cross-site POST to a protected event and renders the default 403", function(){
@@ -58,12 +58,6 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				var result = execute( event = "guinea:main.save", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
 				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
-			} );
-
-			it( "ignores events outside the protected modules", function(){
-				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
-				var result = execute( event = "main.index", renderResults = false );
-				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
 			} );
 
 			it( "never intercepts an error renderer, even inside a protected module", function(){
@@ -94,36 +88,65 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
 			} );
 
-			it( "protects root (non-module) events when '/' is in scope", function(){
-				variables.firewall.getSettings()[ "protectedModules" ] = [ "/" ];
+			it( "protects root (non-module) events under the default '*' secureList", function(){
 				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
 				var result = execute( event = "main.index", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "main.index" );
 				expect( result.getRenderedContent() ).toInclude( "Request Blocked" );
 			} );
 
-			it( "protects everything, root included, when '*' is in scope", function(){
-				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
+			it( "exempts a root-app errors handler even under '*'", function(){
 				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
-				var result = execute( event = "main.index", renderResults = true );
-				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "main.index" );
+				var result = execute( event = "errors.onOops", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "root error page" );
 			} );
 
-			it( "honours excludedModules carve-outs from a '*' scope", function(){
-				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
-				variables.firewall.getSettings()[ "excludedModules" ] = [ "guinea" ];
+			it( "goes dormant when the secureList is empty (service mode)", function(){
+				variables.firewall.getSettings()[ "secureList" ] = "";
 				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
 				var result = execute( event = "guinea:main.save", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
 				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
 			} );
 
-			it( "exempts a root-app errors handler even under '*'", function(){
-				variables.firewall.getSettings()[ "protectedModules" ] = [ "*" ];
+			it( "leaves events outside a scoped secureList alone", function(){
+				variables.firewall.getSettings()[ "secureList" ] = "^guinea:";
 				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
-				var result = execute( event = "errors.onOops", renderResults = true );
+				var result = execute( event = "main.index", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
-				expect( result.getRenderedContent() ).toInclude( "root error page" );
+			} );
+
+			it( "protects events inside a scoped secureList", function(){
+				variables.firewall.getSettings()[ "secureList" ] = "^guinea:";
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:main.save", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "guinea:main.save" );
+			} );
+
+			it( "lets a whiteList module carve-out win over a '*' secureList", function(){
+				variables.firewall.getSettings()[ "whiteList" ] = "^guinea:";
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:main.save", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "guinea saved" );
+			} );
+
+			// The payment-webhook case: one action is deliberately cross-site, but the rest of
+			// its module must stay behind the firewall. These two specs are a pair.
+			it( "whiteLists a single action", function(){
+				variables.firewall.getSettings()[ "whiteList" ] = "^guinea:api\.webhook$";
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:api.webhook", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBeEmpty();
+				expect( result.getRenderedContent() ).toInclude( "guinea webhook" );
+			} );
+
+			it( "still protects the siblings of a whiteListed action", function(){
+				variables.firewall.getSettings()[ "whiteList" ] = "^guinea:api\.webhook$";
+				var oEvent = mockRequest( { "sec-fetch-site" : "cross-site" }, "POST" );
+				var result = execute( event = "guinea:main.save", renderResults = true );
+				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "guinea:main.save" );
 			} );
 
 			it( "logs instead of blocking in monitor mode (staged rollout)", function(){
@@ -140,6 +163,51 @@ component extends="coldbox.system.testing.BaseTestCase" appMapping="root" {
 				var result = execute( event = "guinea:main.save", renderResults = true );
 				expect( result.getPrivateValue( "originBlockedEvent", "" ) ).toBe( "guinea:main.save" );
 				expect( result.getRenderedContent() ).toInclude( "guinea custom denial" );
+			} );
+		} );
+
+		describe( "OriginFirewall pattern matching", function(){
+			// isInPattern() is private, so expose it once and drive the edge cases directly.
+			// The specs above prove the wiring; these prove the matcher itself.
+			beforeEach( function( currentSpec ){
+				setup();
+				variables.matcher = makePublic(
+					getController().getInterceptorService().getInterceptor( "OriginFirewall@originguard" ),
+					"isInPattern"
+				);
+			} );
+
+			it( "treats '*' as every event, without handing a bare '*' to the regex engine", function(){
+				// A lone "*" is a dangling quantifier and would throw if it reached reFindNoCase.
+				expect( variables.matcher.isInPattern( "guinea:main.save", [ "*" ] ) ).toBeTrue();
+				expect( variables.matcher.isInPattern( "main.index", [ "*" ] ) ).toBeTrue();
+			} );
+
+			it( "matches nothing when the pattern list is empty or blank", function(){
+				expect( variables.matcher.isInPattern( "main.index", [] ) ).toBeFalse();
+				expect( variables.matcher.isInPattern( "main.index", [ "", "   " ] ) ).toBeFalse();
+			} );
+
+			it( "matches case-insensitively", function(){
+				expect( variables.matcher.isInPattern( "Admin:Users.Delete", [ "^admin:" ] ) ).toBeTrue();
+			} );
+
+			it( "is an UNANCHORED find, so patterns need their own '^'", function(){
+				// This is the cbsecurity semantic, and the reason every example anchors.
+				expect( variables.matcher.isInPattern( "main.adminIndex", [ "admin" ] ) ).toBeTrue();
+				expect( variables.matcher.isInPattern( "main.adminIndex", [ "^admin" ] ) ).toBeFalse();
+			} );
+
+			it( "matches if ANY pattern in the list hits", function(){
+				expect( variables.matcher.isInPattern( "api:sso.consume", [ "^admin:", "^api:" ] ) ).toBeTrue();
+				expect( variables.matcher.isInPattern( "main.index", [ "^admin:", "^api:" ] ) ).toBeFalse();
+			} );
+
+			it( "can pin a single action with an anchored pattern", function(){
+				var pattern = [ "^guinea:api\.webhook$" ];
+				expect( variables.matcher.isInPattern( "guinea:api.webhook", pattern ) ).toBeTrue();
+				expect( variables.matcher.isInPattern( "guinea:api.webhookList", pattern ) ).toBeFalse();
+				expect( variables.matcher.isInPattern( "guinea:main.save", pattern ) ).toBeFalse();
 			} );
 		} );
 

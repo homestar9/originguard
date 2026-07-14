@@ -48,63 +48,75 @@ box install originguard
 
 ## Quick start: interceptor mode (turnkey)
 
-Tell OriginGuard what to protect. For most apps the answer is "everything", and that is one line:
+There is no quick start. Install the module and **every unsafe request is protected**, no config
+required. Rejected requests get a 403 from a small built-in page (JSON if the request is AJAX).
+Events on an `errors` handler are never intercepted, so your error pages always render.
+
+The config you eventually write is not the opt-in, it is the list of **exceptions**.
+
+### Scoping with `secureList` and `whiteList`
+
+If you have used [cbsecurity](https://coldbox-security.ortusbooks.com/usage/untitled-1)'s security
+rules, this will look familiar. Two settings, both **case-insensitive regex patterns** matched
+against the ColdBox event:
+
+- **`secureList`** - what to protect. Defaults to `"*"`, which means every event.
+- **`whiteList`** - carve-outs from the secureList. A whiteList hit always wins.
 
 ```cfc
 // config/Coldbox.cfc
 moduleSettings = {
     originguard = {
-        protectedModules = [ "*" ]
+        // Protect everything (this is already the default - shown for clarity)...
+        secureList = "*",
+        // ...except the payment webhook, which a gateway posts to cross-site on purpose.
+        whiteList  = "^checkout:api\.webhook$"
     }
 };
 ```
 
-From then on, every unsafe request is verified. Rejected requests get a 403 from a small
-built-in page (JSON if the request is AJAX). Events on an `errors` handler are never
-intercepted, so your error pages always render.
+Patterns are **regexes**, and they are matched with an unanchored *find* - exactly like
+cbsecurity. That means `"admin"` also matches `main.adminIndex`, so **anchor your patterns with
+`^`**. Here is the cookbook:
 
-`protectedModules` takes module names plus two reserved tokens:
-
-| Entry | Protects |
+| Goal | Pattern |
 | --- | --- |
-| `"*"` | Everything: the root app and every module |
-| `"/"` | Root (non-module) events only |
-| `"admin"` | Events inside the `admin` module only |
+| Everything | `*` |
+| Root (non-module) events only | `^[^:]+$` |
+| One module | `^admin:` |
+| One handler | `^admin:users\.` |
+| One exact action | `^admin:users\.delete$` |
+| Two modules | `^admin:,^api:` |
+| Nothing (firewall off) | `""` |
 
-Need carve-outs from a `"*"` scope? Use `excludedModules` (exclusions always win):
+`"*"` is the one special case: it is a convenience alias for "every event", not a glob. Every
+other pattern is a real regex.
 
-```cfc
-moduleSettings = {
-    originguard = {
-        protectedModules = [ "*" ],
-        excludedModules  = [ "cbdebugger" ]
-    }
-};
-```
+Both settings take a **comma list** (`"^admin:,^api:"`) or an **array**
+(`[ "^admin:", "^api:" ]`). Use the array form if a pattern contains a comma of its own - a
+`{1,3}` quantifier, say - because the comma would otherwise split it in two.
 
-Protection is deliberately OFF until you write this config line. OriginGuard is also installed
-transitively by modules that use it in service mode, and a dependency must never start blocking
-requests in your app by itself. One line, you choose the scope, and `"*"` gives you everything.
+### Safe rollout for an existing app (recommended)
 
-### Safe rollout (recommended)
-
-Follow the staged deployment the [Fetch Metadata guidance](https://web.dev/articles/fetch-metadata)
-recommends - observe first, then enforce:
+If you are adding OriginGuard to an app that already has traffic, do **not** go straight to
+enforcing. Follow the staged deployment the
+[Fetch Metadata guidance](https://web.dev/articles/fetch-metadata) recommends - observe first,
+then enforce:
 
 ```cfc
-// Phase 1: protect everything, but only LOG what would be blocked
+// Phase 1: still protecting everything, but only LOG what would be blocked
 moduleSettings = {
     originguard = {
-        protectedModules = [ "*" ],
-        mode             = "monitor"
+        mode = "monitor"
     }
 };
 ```
 
 Run that for a few days and watch your logs for `OriginGuard monitor:` warnings. Legitimate
 cross-site flows will show up here - SAML SSO posts, payment-gateway returns, embedded widgets.
-Add those senders to `allowedOrigins` (or their modules to `excludedModules`), then flip
-`mode = "block"`. Nothing breaks while you learn what your traffic really looks like.
+Add those senders to `allowedOrigins`, or their events to the `whiteList`, then remove
+`mode = "monitor"` to start enforcing. Nothing breaks while you learn what your traffic really
+looks like.
 
 ### Custom denial page
 
@@ -113,8 +125,7 @@ Point `denialEvent` at your own handler to control what a blocked user sees:
 ```cfc
 moduleSettings = {
     originguard = {
-        protectedModules = [ "myapp" ],
-        denialEvent      = "myapp:errors.onOriginFailure"
+        denialEvent = "myapp:errors.onOriginFailure"
     }
 };
 ```
@@ -125,7 +136,8 @@ Your handler receives two `prc` values: `prc.originBlockedEvent` (what was block
 ## Service mode (bring your own enforcement)
 
 If you need custom failure handling per action (re-render a form, fail soft, log and continue),
-skip the interceptor entirely: leave `protectedModules` empty and call the verifier yourself.
+switch the firewall off with `secureList = ""` and call the verifier yourself. The verifier stays
+fully available; only the interceptor goes dormant.
 
 ```cfc
 component {
@@ -153,23 +165,24 @@ never branch on it.
 moduleSettings = {
     originguard = {
         // Master switch. OFF means ZERO cross-origin protection from this module.
-        enabled          = true,
+        enabled        = true,
         // Trusted cross-origin callers. "partner.com" trusts both schemes;
         // "https://partner.com" pins the scheme (recommended). Empty = only your own host.
-        allowedOrigins   = [],
+        allowedOrigins = [],
         // Honour X-Forwarded-Host. Only turn on behind a Host-rewriting reverse proxy.
-        trustUpstream    = false,
-        // Interceptor mode: module names, "*" (everything), and/or "/" (root events).
-        // Empty = interceptor does nothing. [ "*" ] is the recommended config.
-        protectedModules = [],
-        // Interceptor mode: carve-outs from the scope above ("/" = root). Exclusions win.
-        excludedModules  = [],
-        // Interceptor mode: verbs that never need a check.
-        safeMethods      = "GET,HEAD,OPTIONS",
-        // Interceptor mode: "block" enforces, "monitor" only logs would-be blocks.
-        mode             = "block",
-        // Interceptor mode: where a blocked request lands.
-        denialEvent      = "originguard:errors.onBlocked"
+        trustUpstream  = false,
+        // Firewall: which events to protect. Case-insensitive regex patterns (comma list or
+        // array), matched with an unanchored find - anchor with "^". "*" = every event.
+        // Empty = the firewall is off (service mode).
+        secureList     = "*",
+        // Firewall: carve-outs from secureList. Same syntax. A whiteList hit always wins.
+        whiteList      = "",
+        // Firewall: verbs that never need a check.
+        safeMethods    = "GET,HEAD,OPTIONS",
+        // Firewall: "block" enforces, "monitor" only logs would-be blocks.
+        mode           = "block",
+        // Firewall: where a blocked request lands.
+        denialEvent    = "originguard:errors.onBlocked"
     }
 };
 ```
@@ -185,17 +198,37 @@ moduleSettings = {
   verifier compares against `X-Forwarded-Host` (first entry, when proxies chain) instead of the
   internal host. Only do this when a proxy you control sets that header, because clients can send
   it too.
-- **The interceptor is always registered but dormant.** Until you configure `protectedModules`
-  it exits after two struct reads, so installing OriginGuard for service mode adds no meaningful
-  per-request cost.
+- **Patterns are regexes and the match is unanchored.** `"admin"` matches `main.adminIndex`, not
+  just the `admin` module. Anchor with `^`. This is cbsecurity's semantic, kept on purpose so the
+  two modules read the same way.
 - **Method-spoofing is covered.** The interceptor only skips verification when BOTH the real
   HTTP verb and ColdBox's view of it (which `_method=PUT` style spoofing changes) are safe.
 - **Old browsers still work.** No `Sec-Fetch-Site` means the `Origin`/`Referer` fallbacks apply.
   A same-origin form post from a 2015 browser carries at least a `Referer` on your own host.
-- **Legitimate cross-site POSTs need an allowlist entry.** Some flows deliver a browser POST
-  from another site on purpose: SAML SSO (the IdP posts the assertion to you), 3-D Secure
-  payment returns, embedded widgets. Under `protectedModules = [ "*" ]` those will 403 unless
-  you add the sender to `allowedOrigins` or exclude that module.
+- **Legitimate cross-site POSTs need a whiteList or allowlist entry.** Some flows deliver a
+  browser POST from another site on purpose: SAML SSO (the IdP posts the assertion to you),
+  3-D Secure payment returns, embedded widgets. These will 403 unless you add the sender to
+  `allowedOrigins` or the event to the `whiteList`. If you are retrofitting an existing app,
+  `mode = "monitor"` will find them all for you before anything breaks.
+
+## Upgrading from 1.x
+
+**`protectedModules` and `excludedModules` are gone.** They were module-name lists; the
+replacement is `secureList` / `whiteList` event patterns, and protection is now ON by default.
+An app that still sets the old keys will simply have them ignored and get the new `"*"` default,
+which is *more* protection than before, never less.
+
+| 1.x | 2.0 |
+| --- | --- |
+| `protectedModules = [ "*" ]` | nothing - this is the default now |
+| `protectedModules = [ "admin" ]` | `secureList = "^admin:"` |
+| `protectedModules = [ "/" ]` | `secureList = "^[^:]+$"` |
+| `excludedModules = [ "cbdebugger" ]` | `whiteList = "^cbdebugger:"` |
+| `protectedModules = []` (service mode) | `secureList = ""` |
+
+The one case that needs your attention: if you were relying on the interceptor being **dormant**
+by default - because OriginGuard arrived transitively as some other module's dependency and you
+only wanted the verifier - it is no longer dormant. Set `secureList = ""` to restore that.
 
 ## Contributing and tests
 

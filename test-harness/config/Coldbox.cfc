@@ -50,9 +50,11 @@
 
 		// Module Settings
 		moduleSettings = {
-			// Protect the guinea fixture module so the integration specs have a live target
+			// The shipping default, written out so the specs prove it rather than assume it:
+			// every event is protected, nothing is carved out.
 			originguard = {
-				protectedModules = [ "guinea" ]
+				secureList = "*",
+				whiteList  = ""
 			}
 		};
 

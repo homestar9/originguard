@@ -27,7 +27,7 @@ Lucee 5+, Adobe ColdFusion 2023+, BoxLang 1+. Code must run on all three. See **
 | --- | --- |
 | `ModuleConfig.cfc` | Settings defaults and interceptor registration. Read this first. |
 | `models/OriginVerifier.cfc` | The decision engine. Pure and stateless; all security logic lives here. |
-| `interceptors/OriginFirewall.cfc` | Turnkey enforcement (`preProcess`). Dormant until a host configures `protectedModules`. |
+| `interceptors/OriginFirewall.cfc` | Turnkey enforcement (`preProcess`). Protects every unsafe event by default; scoped with `secureList` / `whiteList` regex patterns. |
 | `handlers/Errors.cfc` | The default 403 denial renderer. No views, no layouts. |
 | `test-harness/` | A full ColdBox app whose only job is to run the module under test. CFML specs live here. `modules_app/guinea/` is the fixture module the integration specs protect. |
 | `build/` | `Build.cfc`, which produces the distributable zip. |

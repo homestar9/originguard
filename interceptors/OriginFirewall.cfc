@@ -2,8 +2,9 @@
  * OriginFirewall
  *
  * Turnkey enforcement of the OriginVerifier decision on every unsafe request. Registered
- * automatically by the module, but it does NOTHING until the host configures
- * `protectedModules`, so service-mode consumers pay only a couple of struct reads per request.
+ * automatically by the module, and out of the box it protects EVERY event (`secureList = "*"`).
+ * Scope it with `secureList` / `whiteList` event patterns, or set `secureList = ""` to switch
+ * the firewall off entirely and use the verifier in service mode.
  *
  * On a rejected request it stamps the prc and overrides the event to the configured
  * `denialEvent` -- it never aborts or writes to the response itself.
@@ -26,8 +27,8 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 	function preProcess( event, data, buffer, rc, prc ){
 		var config = getConfig();
 
-		// Fast exit: protection off, or nothing configured to protect.
-		if ( !isBoolean( config.enabled ) || !config.enabled || !arrayLen( config.protectedModules ) ) {
+		// Fast exit: protection off, or nothing configured to secure.
+		if ( !isBoolean( config.enabled ) || !config.enabled || !arrayLen( config.secureList ) ) {
 			return;
 		}
 
@@ -46,8 +47,8 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 		if (
 			!isProtectedEvent(
 				targetEvent,
-				config.protectedModules,
-				config.excludedModules
+				config.secureList,
+				config.whiteList
 			)
 		) {
 			return;
@@ -59,7 +60,7 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 		}
 
 		// Monitor mode (the web.dev staged rollout): log what WOULD be blocked, let it through.
-		// Run this for a while, add allowedOrigins/excludedModules for what shows up, then
+		// Run this for a while, add allowedOrigins/whiteList entries for what shows up, then
 		// switch to block.
 		if ( config.mode == "monitor" ) {
 			log.warn( "OriginGuard monitor: would block '#targetEvent#' (#verdict.reason#)" );
@@ -78,14 +79,14 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 	 */
 	private struct function getConfig(){
 		var config = {
-			"enabled"          : true,
-			"allowedOrigins"   : [],
-			"trustUpstream"    : false,
-			"protectedModules" : [],
-			"excludedModules"  : [],
-			"safeMethods"      : "GET,HEAD,OPTIONS",
-			"mode"             : "block",
-			"denialEvent"      : "originguard:errors.onBlocked"
+			"enabled"        : true,
+			"allowedOrigins" : [],
+			"trustUpstream"  : false,
+			"secureList"     : "*",
+			"whiteList"      : "",
+			"safeMethods"    : "GET,HEAD,OPTIONS",
+			"mode"           : "block",
+			"denialEvent"    : "originguard:errors.onBlocked"
 		};
 		for ( var key in config ) {
 			if ( structKeyExists( variables.settings, key ) ) {
@@ -96,11 +97,13 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 		if ( isArray( config.safeMethods ) ) {
 			config.safeMethods = arrayToList( config.safeMethods );
 		}
-		if ( !isArray( config.protectedModules ) ) {
-			config.protectedModules = listToArray( config.protectedModules );
+		// Both pattern lists are documented as a comma list, but an array is the safer way to
+		// write a pattern that itself contains a comma (a "{1,3}" quantifier, say), so accept both.
+		if ( !isArray( config.secureList ) ) {
+			config.secureList = listToArray( config.secureList );
 		}
-		if ( !isArray( config.excludedModules ) ) {
-			config.excludedModules = listToArray( config.excludedModules );
+		if ( !isArray( config.whiteList ) ) {
+			config.whiteList = listToArray( config.whiteList );
 		}
 		// Anything that is not explicitly "monitor" enforces (fail closed on typos).
 		config.mode = lCase( trim( config.mode ) ) == "monitor" ? "monitor" : "block";
@@ -118,53 +121,55 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 	}
 
 	/**
-	 * Does this event fall inside the protected scope? Scope entries are module names, plus
-	 * two reserved tokens no real module can be named: "*" (every event, root app included)
-	 * and "/" (root events only -- those with no module prefix). Exclusions always win.
+	 * Does this event fall inside the protected scope? The whiteList always wins over the
+	 * secureList, so a carve-out never has to be ordered around anything.
 	 *
 	 * Error renderers (any handler named "errors", module or root) are always exempt so we
 	 * never block a denial page -- including our own after an overrideEvent.
 	 *
-	 * @targetEvent      The current event name, e.g. "myapp:content.save" or "content.save".
-	 * @protectedModules Array of module names and/or the "*" / "/" tokens.
-	 * @excludedModules  Array of module names ("/" = the root app) carved out of the scope.
+	 * @targetEvent The current event name, e.g. "myapp:content.save" or "content.save".
+	 * @secureList  Array of patterns describing what to protect.
+	 * @whiteList   Array of patterns carved out of the secureList.
 	 */
 	private boolean function isProtectedEvent(
 		required string targetEvent,
-		required array protectedModules,
-		required array excludedModules
+		required array secureList,
+		required array whiteList
 	){
 		if ( reFindNoCase( "(^|:)errors\.", arguments.targetEvent ) ) {
 			return false;
 		}
-
-		// The event's module is everything before the first colon; root events have none and
-		// are represented by the "/" token from here on.
-		var scopeKey = "/";
-		if ( listLen( arguments.targetEvent, ":" ) > 1 ) {
-			scopeKey = trim( listFirst( arguments.targetEvent, ":" ) );
-		}
-
-		if ( isInScope( scopeKey, arguments.excludedModules ) ) {
+		if ( isInPattern( arguments.targetEvent, arguments.whiteList ) ) {
 			return false;
 		}
-		if ( isInScope( "*", arguments.protectedModules ) ) {
-			return true;
-		}
-		return isInScope( scopeKey, arguments.protectedModules );
+		return isInPattern( arguments.targetEvent, arguments.secureList );
 	}
 
 	/**
-	 * Is this scope key (a module name, or "/" for the root app) present in a configured
-	 * scope list? Entries are trimmed and tolerate a trailing colon.
+	 * Does the event match any pattern in the list? Patterns are case-insensitive regexes tested
+	 * with an UNANCHORED find, the same semantics cbsecurity's security rules use: "^admin:"
+	 * means "starts with admin:", while a bare "admin" would ALSO match "main.adminIndex".
+	 * Anchor your patterns.
 	 *
-	 * @moduleKey The module name to look for, or "/" for root events, or the "*" token.
-	 * @scopeList Array of configured module names / tokens.
+	 * The single token "*" is a convenience alias for "every event". It is not a glob, and on its
+	 * own it is not even a valid regex (a dangling quantifier), so it is short-circuited here
+	 * before reFindNoCase ever sees it.
+	 *
+	 * A malformed pattern throws, deliberately: a typo in a security rule should be loud.
+	 *
+	 * @targetEvent The current event name.
+	 * @patterns    Array of regex patterns, and/or the "*" token.
 	 */
-	private boolean function isInScope( required string moduleKey, required array scopeList ){
-		for ( var entry in arguments.scopeList ) {
-			var cleaned = reReplace( trim( entry ), ":$", "" );
-			if ( len( cleaned ) && cleaned == arguments.moduleKey ) {
+	private boolean function isInPattern( required string targetEvent, required array patterns ){
+		for ( var pattern in arguments.patterns ) {
+			var cleaned = trim( pattern );
+			if ( !len( cleaned ) ) {
+				continue;
+			}
+			if ( cleaned == "*" ) {
+				return true;
+			}
+			if ( reFindNoCase( cleaned, arguments.targetEvent ) ) {
 				return true;
 			}
 		}
