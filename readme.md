@@ -277,28 +277,10 @@ This is a shim. The ColdBox maintainers have accepted
 upstream. When that ships, MethodGuard will be removed from this module. Nothing you write depends on
 it, so the removal will not affect your app.
 
-## Upgrading from 1.x
-
-**`protectedModules` and `excludedModules` are gone.** They were module-name lists; the
-replacement is `secureList` / `whiteList` event patterns, and protection is now ON by default.
-An app that still sets the old keys will simply have them ignored and get the new `"*"` default,
-which is *more* protection than before, never less.
-
-| 1.x | 2.0 |
-| --- | --- |
-| `protectedModules = [ "*" ]` | nothing - this is the default now |
-| `protectedModules = [ "admin" ]` | `secureList = "^admin:"` |
-| `protectedModules = [ "/" ]` | `secureList = "^[^:]+$"` |
-| `excludedModules = [ "cbdebugger" ]` | `whiteList = "^cbdebugger:"` |
-| `protectedModules = []` (service mode) | `secureList = ""` |
-
-The one case that needs your attention: if you were relying on the interceptor being **dormant**
-by default - because OriginGuard arrived transitively as some other module's dependency and you
-only wanted the verifier - it is no longer dormant. Set `secureList = ""` to restore that.
-
 ## Contributing and tests
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). To run the suite locally:
+See [CONTRIBUTING.md](CONTRIBUTING.md). 
+To run the suite locally:
 
 ```bash
 box run-script install:dependencies
