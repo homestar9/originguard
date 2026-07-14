@@ -2,7 +2,7 @@
 	"name" 		: "OriginGuard",
 	"version"   : "1.0.0",
 	"location"  : "forgeboxStorage",
-	"author" 	: "David Levin",
+	"author" 	: "Angry Sam Productions, Inc.",
 	"homepage"	: "https://github.com/homestar9/originguard",
 	"documentation"		: "https://github.com/homestar9/originguard",
 	"repository"		: { "type" : "git", "url" : "https://github.com/homestar9/originguard" },
