@@ -25,10 +25,11 @@ Lucee 5+, Adobe ColdFusion 2023+, BoxLang 1+. Code must run on all three. See **
 
 | Path | Purpose |
 | --- | --- |
-| `ModuleConfig.cfc` | Settings, dependencies, interceptors, breadcrumb rules, layouts. Read this first. |
-| `models/` | Domain logic, one folder per entity, on top of the `Base*` classes. |
-| `interceptors/` | `App.cfc` (registered as `cms`) and `Csrf.cfc`. |
-| `test-harness/` | A full ColdBox app whose only job is to run the module under test. CFML specs live here. |
+| `ModuleConfig.cfc` | Settings defaults and interceptor registration. Read this first. |
+| `models/OriginVerifier.cfc` | The decision engine. Pure and stateless; all security logic lives here. |
+| `interceptors/OriginFirewall.cfc` | Turnkey enforcement (`preProcess`). Dormant until a host configures `protectedModules`. |
+| `handlers/Errors.cfc` | The default 403 denial renderer. No views, no layouts. |
+| `test-harness/` | A full ColdBox app whose only job is to run the module under test. CFML specs live here. `modules_app/guinea/` is the fixture module the integration specs protect. |
 | `build/` | `Build.cfc`, which produces the distributable zip. |
 | `docs/` | Subsystem reference docs. Dev-only, excluded from the build. |
 
@@ -36,6 +37,10 @@ Lucee 5+, Adobe ColdFusion 2023+, BoxLang 1+. Code must run on all three. See **
 
 - **Never name a caller local the same as the callee's parameter** when passing it positionally. Lucee
     mis-resolves the argument and throws `UDFCasterException`, or worse, passes null.
+- **Never name a method after a CFML built-in function.** An unscoped call inside the component
+    resolves to the BIF on Lucee, silently changing semantics. This repo hit it twice: a method named
+    `evaluate()` invoked the dynamic-evaluation BIF, and `listContains()` would have swapped exact-item
+    matching for the BIF's substring matching (hence `evaluateHeaders()` and `isInList()`).
 - **`isValid( "numeric", v )` is lenient on Lucee** (it accepts `"1.2.3"`). Use `isNumeric()` when the
     value feeds a numeric column.
 - Prefer `keyExists()` over the Elvis operator `?:`.
@@ -60,13 +65,15 @@ harness loads the module under development without a separate install.
 ```bash
 box run-script install:dependencies   # module + test-harness dependencies
 
-box run-script start:lucee5           # also: start:lucee6, start:2023 (Adobe CF), start:boxlang
-box run-script stop:lucee5            # default port 60301
+box run-script start:lucee5           # also: start:lucee6, start:2023, start:2025 (Adobe CF),
+                                      #       start:boxlang, start:boxlang-cfml
+box run-script stop:lucee5            # port 60299 for every engine
 box run-script logs:lucee5
 
+box run-script format                 # cfformat; CI runs format:check, so format before committing
 box run-script build:module           # the distributable zip
 
-# ALWAYS check before starting a server: the port is shared.
+# ALWAYS check before starting a server: the port is shared (with other repos too).
 box server list
 ```
 
@@ -75,11 +82,13 @@ box server list
 With a server running, open the TestBox runner:
 
 ```
-http://127.0.0.1:[port]/tests/runner.cfm                              # full suite
-http://127.0.0.1:[port]/tests/runner.cfm?reporter=text                # plain text
-http://127.0.0.1:[port]/tests/runner.cfm?bundles=tests.specs.PageTest # one bundle
-http://127.0.0.1:[port]/tests/runner.cfm?directory=tests.specs.unit   # one directory
+http://127.0.0.1:60299/tests/runner.cfm                                             # full suite
+http://127.0.0.1:60299/tests/runner.cfm?reporter=text                               # plain text
+http://127.0.0.1:60299/tests/runner.cfm?bundles=tests.specs.unit.OriginVerifierTest # one bundle
+http://127.0.0.1:60299/tests/runner.cfm?directory=tests.specs.unit                  # one directory
 ```
+
+Add `&fwreinit=1` after changing `ModuleConfig.cfc`, an interceptor, or harness config.
 
 CFML specs live in `test-harness/tests/specs/` (`unit/`, `integration/`). 
 
@@ -88,8 +97,10 @@ CFML specs live in `test-harness/tests/specs/` (`unit/`, `integration/`).
 ## Code style
 
 - **Method Javadocs:** every method, public and private, carries a javadoc block with `@param` lines.
-- **Handler naming:** plural nouns (`Users.cfc`, `Pages.cfc`, `Categories.cfc`).
-- **Dependency injection:** prefer `property name="service" inject="Service@cms"` over `getInstance()`.
+- **Formatter:** cfformat is ON in this repo. Run `box run-script format` before committing; CI fails on
+    `format:check`.
+- **Dependency injection:** prefer `property name="verifier" inject="OriginVerifier@originguard"` over
+    `getInstance()`.
 - **PRC vs RC:** `prc` for internal / server-set data, `rc` for raw user input. Always validate `rc`.
 - **Framework reinit:** `?fwreinit=true`.
 - **Cross-engine:** see the tripwires above. All three engines, always.

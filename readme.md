@@ -1,101 +1,158 @@
-<p align="center">
-	<img src="https://www.ortussolutions.com/__media/coldbox-185-logo.png">
-	<br>
-	<img src="https://www.ortussolutions.com/__media/wirebox-185.png" height="125">
-	<img src="https://www.ortussolutions.com/__media/cachebox-185.png" height="125" >
-	<img src="https://www.ortussolutions.com/__media/logbox-185.png"  height="125">
-</p>
+# OriginGuard
 
-<p align="center">
-	Copyright Since 2005 ColdBox Platform by Luis Majano and Ortus Solutions, Corp
-	<br>
-	<a href="https://www.coldbox.org">www.coldbox.org</a> |
-	<a href="https://www.ortussolutions.com">www.ortussolutions.com</a>
-</p>
+Modern, stateless CSRF protection for ColdBox applications. No tokens, no hidden form fields, no
+session storage.
 
-----
+OriginGuard decides whether a state-changing request really came from your own site by reading the
+headers the **browser itself** attaches to every request (`Sec-Fetch-Site`, `Origin`, `Referer`).
+This is the same algorithm Go 1.25 ships as `http.CrossOriginProtection`, designed by Filippo
+Valsorda. Because the browser controls these headers (an attacking page cannot forge them), a
+simple header check replaces the whole token dance.
 
-# Ortus ColdBox Module Template
+## Why not tokens?
 
-This template can be used to create Ortus based ColdBox Modules.  To use, just click the `Use this Template` button in the github repository: https://github.com/coldbox-modules/module-template and run the setup task from where you cloned it.
+Token CSRF protection works, but it drags a lot behind it: session state, token generation and
+rotation, hidden fields in every form, special handling for AJAX, and broken forms whenever a
+token expires. Header-based protection needs none of that. Every modern browser (since roughly
+2020) sends `Sec-Fetch-Site` on every request, and older browsers still send `Origin` or
+`Referer`, which OriginGuard falls back to.
+
+## How the decision works
+
+For each unsafe request (anything not GET/HEAD/OPTIONS), OriginGuard walks five steps and stops at
+the first one that applies:
+
+| Step | Signal | Verdict |
+| --- | --- | --- |
+| 1 | The `Origin` is in your configured `allowedOrigins` | **Allow** (a trusted partner site) |
+| 2 | `Sec-Fetch-Site` is present | **Allow** only `same-origin` or `none`; reject `same-site` and `cross-site` |
+| 3 | No fetch metadata, but an `Origin` header | **Allow** if it matches your host or the allowlist |
+| 4 | No `Origin` either, but a `Referer` | Same comparison as step 3 |
+| 5 | No browser signal at all | **Allow** - curl, TestBox, and server-to-server calls are not CSRF vectors |
+
+Step 5 matters: a request with no browser headers at all is not coming from a browser, so it
+cannot be cross-site request forgery. Blocking it would break every API client and scheduled job
+for zero security gain.
+
+## Requirements
+
+- ColdBox 7+
+- Lucee 5+, Adobe ColdFusion 2023+, or BoxLang 1+
+- Zero runtime dependencies
+
+## Installation
 
 ```bash
-box task run taskFile=build/SetupTemplate
+box install originguard
 ```
 
-The `SetupTemplate` task will ask you for your module name, id and description and configure the template for you! Enjoy!
+## Quick start: interceptor mode (turnkey)
 
-## Directory Structure
+Tell OriginGuard which of your app's modules to protect. That is the whole setup:
 
-The root of the module is the root of the repository. Add all the necessary files your module will need.
+```cfc
+// config/Coldbox.cfc
+moduleSettings = {
+    originguard = {
+        protectedModules = [ "myapp", "admin" ]
+    }
+};
+```
 
-* `.github/workflows` - These are the github actions to test and build the module via CI
-* `build` - This is the CommandBox task that builds the project.  Only modify if needed.  Most modules will never modify it. (Modify if needed)
-* `test-harness` - This is a ColdBox testing application, where you will add your testing files, specs etc.
-* `.cfformat.json` - A CFFormat using the Ortus Standards
-* `.cflintrc` - A CFLint configuration file according to Ortus Standards
-* `.editorconfig` - Smooth consistency between editors
-* `.gitattributes` - Git attributes
-* `.gitignore` - Basic ignores. Modify as needed.
-* `.markdownlint.json` - A linting file for markdown docs
-* `box.json` - The box.json for YOUR module.  Modify as needed.
-* `changelog.md` - A nice changelog tracking file
-* `ModuleConfig.cfc` - Your module's configuration. Modify as needed.
-* `readme.md` - Your module's readme. Modify as needed.
-* `server-xx@x.json` - A set of json files to configure the major engines your modules supports.
+From then on, every unsafe request to an event inside those modules is verified. Rejected
+requests get a 403 from a small built-in page (JSON if the request is AJAX). Events matching
+`:errors.` are never intercepted, so your error pages always render.
 
-## Test Harness
+### Custom denial page
 
-The test harness is created to bootstrap your working module into the application `afterAspectsLoad`.  This is done in the `config/ColdBox.cfc`.  It includes some key features:
+Point `denialEvent` at your own handler to control what a blocked user sees:
 
-* `config` - Modify as needed
-* `tests` - All your testing specs should go here.  Please notice the commented out ORM fixtures.  Enable them if your module requires ORM
-* `.cfconfig.json` - A prepared cfconfig json file so your engine data is consistent.  Modify as needed.
-* `.env.sample` - An environment property file sample.  Copy and create a `.env` if your app requires it.
+```cfc
+moduleSettings = {
+    originguard = {
+        protectedModules = [ "myapp" ],
+        denialEvent      = "myapp:errors.onOriginFailure"
+    }
+};
+```
 
+Your handler receives two `prc` values: `prc.originBlockedEvent` (what was blocked) and
+`prc.originBlockReason` (why, e.g. `sec-fetch-site:cross-site`). Remember to answer with a 403.
 
-## API Docs
+## Service mode (bring your own enforcement)
 
-The build task will take care of building API Docs using DocBox for you but **ONLY** for the `models` folder in your module.  If you want to document more then make sure you modify the `build/Build.cfc` task.
+If you need custom failure handling per action (re-render a form, fail soft, log and continue),
+skip the interceptor entirely: leave `protectedModules` empty and call the verifier yourself.
 
-## Github Actions Automation
+```cfc
+component {
 
-The github actions will clone, test, package, deploy your module to ForgeBox and the Ortus S3 accounts for API Docs and Artifacts.  So please make sure the following environment variables are set in your repository. ** Please note that most of them are already defined at the org level **
+    property name="originVerifier" inject="OriginVerifier@originguard";
+    property name="guardSettings"  inject="coldbox:modulesettings:originguard";
 
-* `FORGEBOX_TOKEN` - The Ortus ForgeBox API Token
-* `AWS_ACCESS_KEY` - The travis user S3 account
-* `AWS_ACCESS_SECRET` - The travis secret S3
+    function doLogin( event, rc, prc ){
+        var verdict = originVerifier.verify( event, guardSettings );
+        if ( !verdict.allowed ) {
+            // your own failure path: re-render, relocate, log...
+            return relocate( "main.login" );
+        }
+        // ... proceed
+    }
+}
+```
 
-> Please contact the admins in the `#infrastructure` channel for these credentials if needed
+`verify()` returns `{ allowed : boolean, reason : string }`. The `reason` is for logging only -
+never branch on it.
 
-## Welcome to ColdBox
+## All settings
 
-ColdBox *Hierarchical* MVC is the de-facto enterprise-level [HMVC](https://en.wikipedia.org/wiki/Hierarchical_model%E2%80%93view%E2%80%93controller) framework for ColdFusion (CFML) developers. It's professionally backed, conventions-based, modular, highly extensible, and productive. Getting started with ColdBox is quick and painless.  ColdBox takes the pain out of development by giving you a standardized methodology for modern ColdFusion (CFML) development with features such as:
+```cfc
+moduleSettings = {
+    originguard = {
+        // Master switch. OFF means ZERO cross-origin protection from this module.
+        enabled          = true,
+        // Trusted cross-origin callers (host or host:port). Empty = only your own host.
+        allowedOrigins   = [],
+        // Honour X-Forwarded-Host. Only turn on behind a Host-rewriting reverse proxy.
+        trustUpstream    = false,
+        // Interceptor mode: module prefixes to protect. Empty = interceptor does nothing.
+        protectedModules = [],
+        // Interceptor mode: verbs that never need a check.
+        safeMethods      = "GET,HEAD,OPTIONS",
+        // Interceptor mode: where a blocked request lands.
+        denialEvent      = "originguard:errors.onBlocked"
+    }
+};
+```
 
-* [Conventions instead of configuration](https://coldbox.ortusbooks.com/getting-started/conventions)
-* [Modern URL routing](https://coldbox.ortusbooks.com/the-basics/routing)
-* [RESTFul APIs](https://coldbox.ortusbooks.com/the-basics/event-handlers/rendering-data)
-* [A hierarchical approach to MVC using ColdBox Modules](https://coldbox.ortusbooks.com/hmvc/modules)
-* [Event-driven programming](https://coldbox.ortusbooks.com/digging-deeper/interceptors)
-* [Async and Parallel programming constructs](https://coldbox.ortusbooks.com/digging-deeper/promises-async-programming)
-* [Integration & Unit Testing](https://coldbox.ortusbooks.com/testing/testing-coldbox-applications)
-* [Included dependency injection](https://wirebox.ortusbooks.com)
-* [Caching engine and API](https://cachebox.ortusbooks.com)
-* [Logging engine](https://logbox.ortusbooks.com)
-* [An extensive eco-system](https://forgebox.io)
-* Much More
+## Things worth knowing
 
-## Learning ColdBox
+- **Allowlist entries are scheme-blind and beat `Sec-Fetch-Site`.** `allowedOrigins` entries are
+  compared as `host[:port]` with the scheme ignored (so TLS-terminating proxies need no special
+  config), and a match is trusted even when the browser reports `cross-site`. Practical rule:
+  only allowlist hosts you would trust over plain `http`.
+- **Behind a reverse proxy** that rewrites the `Host` header, set `trustUpstream = true` so the
+  verifier compares against `X-Forwarded-Host` (first entry, when proxies chain) instead of the
+  internal host. Only do this when a proxy you control sets that header, because clients can send
+  it too.
+- **The interceptor is always registered but dormant.** Until you configure `protectedModules`
+  it exits after two struct reads, so installing OriginGuard for service mode adds no meaningful
+  per-request cost.
+- **Method-spoofing is covered.** The interceptor only skips verification when BOTH the real
+  HTTP verb and ColdBox's view of it (which `_method=PUT` style spoofing changes) are safe.
+- **Old browsers still work.** No `Sec-Fetch-Site` means the `Origin`/`Referer` fallbacks apply.
+  A same-origin form post from a 2015 browser carries at least a `Referer` on your own host.
 
-ColdBox is the defacto standard for building modern ColdFusion (CFML) applications.  It has the most extensive [documentation](https://coldbox.ortusbooks.com) of all modern web application frameworks.
+## Contributing and tests
 
+See [CONTRIBUTING.md](CONTRIBUTING.md). To run the suite locally:
 
-If you don't like reading so much, then you can try our video learning platform: [CFCasts (www.cfcasts.com)](https://www.cfcasts.com)
+```bash
+box run-script install:dependencies
+box run-script start:lucee5     # or start:2023, start:boxlang-cfml, ...
+# open http://127.0.0.1:60299/tests/runner.cfm
+```
 
-## Ortus Sponsors
+## License
 
-ColdBox is a professional open-source project and it is completely funded by the [community](https://patreon.com/ortussolutions) and [Ortus Solutions, Corp](https://www.ortussolutions.com).  Ortus Patreons get many benefits like a cfcasts account, a FORGEBOX Pro account and so much more.  If you are interested in becoming a sponsor, please visit our patronage page: [https://patreon.com/ortussolutions](https://patreon.com/ortussolutions)
-
-### THE DAILY BREAD
-
- > "I am the way, and the truth, and the life; no one comes to the Father, but by me (JESUS)" Jn 14:1-12
+Apache License, Version 2.0.
