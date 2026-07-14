@@ -32,9 +32,15 @@ component extends="coldbox.system.Interceptor" accessors="true" {
 			return;
 		}
 
-		// Skip only when BOTH the real verb AND ColdBox's view of it are safe. A `_method=POST`
-		// spoof changes getHTTPMethod() but not cgi.request_method; a TestBox spec that mocks
-		// getHTTPMethod() changes it the other way. Either one being unsafe means we verify.
+		// Skip only when BOTH the real verb AND ColdBox's view of it are safe. Never gate on
+		// getHTTPMethod() alone: a hostile cross-origin POST declaring `_method=GET` would read as
+		// safe and skip verification entirely.
+		//
+		// MethodGuard has already stripped any forged `_method` off a safe verb by the time we run,
+		// so the second half of this AND looks redundant. It is not, for two reasons: a TestBox spec
+		// mocks getHTTPMethod() while cgi.request_method stays the runner's GET (that is how the
+		// integration bundle simulates an unsafe request), and it keeps this gate honest on the day
+		// MethodGuard is deleted. Leave it alone.
 		if (
 			isSafeMethod( cgi.request_method, config.safeMethods )
 			&& isSafeMethod( arguments.event.getHTTPMethod(), config.safeMethods )

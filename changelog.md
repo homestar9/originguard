@@ -9,6 +9,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] => 2026-JUL-14
+
+OriginGuard now strips a forged `_method` before anything reads the HTTP verb. Purely additive: no
+settings changed, no behavior changed for any request that was not already an attack.
+
+### The hole this closes
+
+ColdBox's `event.getHTTPMethod()` is literally `getValue( "_method", CGI.REQUEST_METHOD )` - a
+spoofable request value with no whitelist. That much is deliberate, because an HTML form can only GET
+or POST, so `_method=DELETE` is how a browser form drives a RESTful DELETE route.
+
+The problem is that ColdBox then validates `this.allowedMethods` against that *claimed* verb. So:
+
+```html
+<img src="https://your-app.com/admin/tags/1/delete?_method=DELETE">
+```
+
+is a real browser **GET** - the browser fires it itself, from any site on the internet, with the
+victim's cookies - yet `allowedMethods` sees `DELETE`, decides the verb is allowed, and runs the
+delete. **This is not theoretical. It deleted a record.**
+
+Anyone who believes "my mutating actions declare `this.allowedMethods`, so they are not GET-reachable"
+is wrong until something strips the forged key. That is exactly what OriginGuard's users believe.
+
+### Added
+
+* **`interceptors/MethodGuard.cfc`**, registered automatically alongside the firewall. The rule: *a
+  request that arrived on a safe verb (GET/HEAD/OPTIONS) may not claim an unsafe one.* When one does,
+  the `_method` key is deleted and the strip is logged at WARN.
+
+  The legitimate direction is untouched. A real `POST` carrying `_method=DELETE` is how every Delete
+  button in every app submits, and it still works.
+
+### Design notes
+
+* **It deletes the key rather than rendering a 403.** Dropping `_method` makes `getHTTPMethod()` fall
+  back to the honest CGI verb, so ColdBox's own `allowedMethods` check sees `GET`, does not match the
+  action's declared `DELETE`, and answers 405 through the OWNING handler's `onInvalidHTTPMethod`. That
+  means MethodGuard needs no scoping, no config, no `denialEvent` and no error view - it knows about
+  no module at all, so it protects a plugin exactly as well as the host app. A 403 and a 405 are
+  equally inert and the record survives either way; the 405 is just far cheaper.
+
+* **It reads no settings and cannot be switched off.** `enabled`, `secureList` and `mode` scope the
+  *origin* check. None of them touches MethodGuard. A GET-reachable delete is a bug, not a policy, so
+  no config line may reopen it. This is a deliberate departure from `enabled` being a true master
+  switch, which is why every strip is logged.
+
+* **The firewall's dual-verb gate did NOT change.** It still skips verification only when BOTH
+  `cgi.request_method` and `getHTTPMethod()` are safe. That looks redundant now that MethodGuard runs
+  first, and it is not: never gate on `getHTTPMethod()` alone, or a hostile cross-origin POST
+  declaring `_method=GET` reads as safe and skips verification entirely. MethodGuard deliberately does
+  not touch that direction, because a declared GET can only make `allowedMethods` *stricter* and
+  cannot reach a mutation.
+
+* **`isSpoofed()` is public, and that is not an accident.** Under TestBox `cgi.request_method` is
+  always `GET`, so an integration spec can only ever reproduce the attack - it physically cannot
+  reproduce the legitimate `POST -> DELETE` form path. Invert the transport check and OriginGuard would
+  strip `_method` from every legitimate POST, every Delete button in every consuming app would break in
+  a real browser, and the whole CFML suite would stay green. The pure-string unit matrix driving
+  `isSpoofed()` is the only coverage of that branch that exists.
+
+### Known limitation
+
+**Nothing can de-spoof before routing.** `RoutingService` reads the forged verb during
+`requestCapture()`, which runs before every interception point. Harmless while your router is
+verb-agnostic (routes then resolve from the path and the forged verb changes nothing), but a router
+using `.withVerbs()` or an action struct reopens the hole for any action that does not *also* declare
+`this.allowedMethods`. It is a fact about ColdBox, not something this module can fix. See the readme.
+
+### This is temporary
+
+MethodGuard is a shim. The ColdBox maintainers have accepted
+[COLDBOX-1406](https://ortussolutions.atlassian.net/browse/COLDBOX-1406) to fix `getHTTPMethod()`
+upstream. When that ships, delete `interceptors/MethodGuard.cfc`, its registration line in
+`ModuleConfig.cfc`, both `MethodGuardTest` bundles, and the `guinea` `destroy` fixture. Nothing else
+in the module depends on it, which is exactly why it lives in its own file.
+
 ## [2.0.0] => 2026-JUL-14
 
 The firewall stops thinking in *modules* and starts thinking in *event patterns*, and it is now ON

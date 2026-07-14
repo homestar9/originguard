@@ -201,8 +201,9 @@ moduleSettings = {
 - **Patterns are regexes and the match is unanchored.** `"admin"` matches `main.adminIndex`, not
   just the `admin` module. Anchor with `^`. This is cbsecurity's semantic, kept on purpose so the
   two modules read the same way.
-- **Method-spoofing is covered.** The interceptor only skips verification when BOTH the real
-  HTTP verb and ColdBox's view of it (which `_method=PUT` style spoofing changes) are safe.
+- **Method-spoofing is covered, twice.** The firewall only skips verification when BOTH the real
+  HTTP verb and ColdBox's view of it (which `_method=PUT` style spoofing changes) are safe. And
+  MethodGuard, below, strips a forged `_method` before anything reads the verb at all.
 - **Old browsers still work.** No `Sec-Fetch-Site` means the `Origin`/`Referer` fallbacks apply.
   A same-origin form post from a 2015 browser carries at least a `Referer` on your own host.
 - **Legitimate cross-site POSTs need a whiteList or allowlist entry.** Some flows deliver a
@@ -210,6 +211,69 @@ moduleSettings = {
   3-D Secure payment returns, embedded widgets. These will 403 unless you add the sender to
   `allowedOrigins` or the event to the `whiteList`. If you are retrofitting an existing app,
   `mode = "monitor"` will find them all for you before anything breaks.
+
+## MethodGuard: the forged `_method` (and its one limitation)
+
+OriginGuard also installs a second, much smaller interceptor called **MethodGuard**. You do not
+configure it and you cannot switch it off. Here is what it does and why.
+
+### The problem
+
+ColdBox's `event.getHTTPMethod()` reads a spoofable request value:
+
+```cfc
+return getValue( "_method", CGI.REQUEST_METHOD );
+```
+
+That is on purpose. An HTML form can only GET or POST, so `_method=DELETE` is how a browser form
+drives a RESTful DELETE route. The trouble is that ColdBox validates `this.allowedMethods` against
+that *claimed* verb. So this:
+
+```html
+<img src="https://your-app.com/admin/tags/1/delete?_method=DELETE">
+```
+
+is a real browser **GET**, fired by the browser itself, from any site on the internet, with your
+logged-in user's cookies attached. But `allowedMethods` sees `DELETE`, decides the verb is fine, and
+runs the delete. **This is not theoretical. It deleted a record.**
+
+If you believe "my mutating actions declare `this.allowedMethods`, so they are not reachable by GET",
+you are wrong until something strips that forged `_method`.
+
+### The fix
+
+**A request that arrived on a safe verb (GET/HEAD/OPTIONS) may not claim an unsafe one.** When one
+does, MethodGuard deletes the `_method` key. `getHTTPMethod()` then falls back to the honest verb,
+ColdBox's own `allowedMethods` check sees `GET`, and answers **405 through your own handler's
+`onInvalidHTTPMethod`**. Nothing to configure, and no denial page needed.
+
+The legitimate direction is untouched: a real `POST` carrying `_method=DELETE` is exactly how every
+Delete button in every app submits, and it still works.
+
+**It ignores every setting on this page.** `enabled = false`, `secureList = ""` and `mode = "monitor"`
+all turn off the *origin* check. None of them turns off MethodGuard. A GET-reachable delete is a bug,
+not a policy, so no config line may reopen it. Every strip is logged at WARN, so it is never silent.
+
+### The limitation you need to know about
+
+**Nothing can de-spoof before routing.** ColdBox's `RoutingService` reads the forged verb while it
+captures the request, which happens before every interception point in the framework. There is no
+earlier hook, so this is a fact about ColdBox and not something this module can fix.
+
+That is harmless if your router is verb-agnostic (no `.withVerbs()`, no action structs), because then
+routes resolve from the path and a forged verb changes nothing.
+
+**But if your router uses `.withVerbs()` or an action struct, the hole is still open** for any action
+that does not *also* declare `this.allowedMethods` - the router will already have picked the
+DELETE-mapped action off the forged verb before OriginGuard ever runs. Declare `this.allowedMethods`
+on your mutating actions and you are covered either way.
+
+### It is temporary
+
+This is a shim. The ColdBox maintainers have accepted
+[COLDBOX-1406](https://ortussolutions.atlassian.net/browse/COLDBOX-1406) to fix `getHTTPMethod()`
+upstream. When that ships, MethodGuard will be removed from this module. Nothing you write depends on
+it, so the removal will not affect your app.
 
 ## Upgrading from 1.x
 

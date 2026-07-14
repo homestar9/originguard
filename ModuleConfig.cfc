@@ -54,6 +54,23 @@ component {
 		// ColdBox appends "@originguard" to the name, so the final registered name is
 		// "OriginFirewall@originguard".
 		interceptors = [
+			// A TEMPORARY SHIM for a ColdBox bug (COLDBOX-1406): getHTTPMethod() trusts a spoofable
+			// `_method` key, so a cross-site <img src="...?_method=DELETE"> is a GET that
+			// this.allowedMethods waves through as a DELETE. MethodGuard strips the forged key.
+			//
+			// It reads NO settings and is not scoped: `enabled`, `secureList` and `mode` turn off the
+			// ORIGIN check, never this. A GET-reachable delete is a bug, not a policy.
+			//
+			// It is registered first so a stripped request reaches OriginFirewall already honest, but
+			// the order is not safety-critical: run OriginFirewall first and it would simply reject the
+			// same cross-site request as a DELETE. Either order ends inert, so the order only decides
+			// whether the attacker gets a 405 or a 403.
+			//
+			// DELETE THIS ENTRY when COLDBOX-1406 ships. See interceptors/MethodGuard.cfc.
+			{
+				class : "originguard.interceptors.MethodGuard",
+				name  : "MethodGuard"
+			},
 			{
 				class : "originguard.interceptors.OriginFirewall",
 				name  : "OriginFirewall"
