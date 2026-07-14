@@ -114,10 +114,11 @@ the black-box `cfhttp` specs at the bottom of the firewall bundle, which need th
 ## Gotchas already paid for
 
 - `fwreinit=1` is required after touching `ModuleConfig.cfc`, interceptors, or harness config.
-- BoxLang currently blows up in the runner before any spec executes (`InterceptorService.cfc:677`,
-  "The key [NAME] was not found in the struct"). It is a ColdBox/BoxLang metadata incompatibility in
-  the vendored framework, not a module bug, and it predates the MethodGuard work. Verify on Lucee and
-  Adobe.
+- Run BoxLang through the `boxlang-cfml` server (`box run-script start:boxlang-cfml`), which boots
+  BoxLang with the `bx-compat-cfml` layer so the CFML runner works. There is no native-BoxLang
+  server: native BoxLang crashed the runner before any spec executed (`InterceptorService.cfc:677`,
+  "The key [NAME] was not found in the struct") on a ColdBox/BoxLang metadata incompatibility in the
+  vendored framework, and the module ships no `.bx` code, so native support was dropped.
 - Adobe's `cfhttp` result has no `status_code` key; use the text `statusCode` ("403 Forbidden").
 - Adobe refuses a `POST` with zero `cfhttpparam` tags; add a dummy formfield.
 - ColdBox appends `@moduleName` to interceptor names a module registers, so the firewall's

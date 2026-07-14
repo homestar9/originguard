@@ -1,4 +1,5 @@
 # OriginGuard
+
 ![OriginGuard Logo](https://github.com/homestar9/originguard/blob/master/originguard-logo.avif?raw=true)
 
 Modern, stateless CSRF protection for ColdBox applications. No tokens, no hidden form fields, no
@@ -38,7 +39,7 @@ for zero security gain.
 ## Requirements
 
 - ColdBox 7+
-- Lucee 5+, Adobe ColdFusion 2023+, or BoxLang 1+
+- Lucee 5+, Adobe ColdFusion 2023+, or BoxLang 1+ (BoxLang runs in CFML-compatibility mode)
 - Zero runtime dependencies
 
 ## Installation

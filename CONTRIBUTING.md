@@ -10,8 +10,6 @@ Hola amigo! I'm really excited that you are interested in contributing to Origin
 - [Development Setup](#development-setup)
 - [Language Compatibility](#language-compatibility)
 - [Coding Styles \& Formatting](#coding-styles--formatting)
-- [CFC Docs With DocBox](#cfc-docs-with-docbox)
-- [Financial Contributions](#financial-contributions)
 - [Contributors](#contributors)
 
 ## Code Of Conduct
@@ -34,24 +32,19 @@ If you file a bug report, your issue should contain a title, a clear description
 
 ## Support Questions
 
-If you have any questions on usage, professional support or just ideas to bounce off the maintainers, please do not create an issue.  Leverage our support channels first.
-
-- Ortus Community Discourse: https://community.ortussolutions.com
-- Box Slack Team: http://boxteam.ortussolutions.com/
-- Professional Support: https://www.ortussolutions.com/services/support
+If you have any questions on usage, professional support or just ideas to bounce off the maintainers, please create an issue or email directly.
 
 ## Pull Request Guidelines
 
 - The `(master|main)` branch is just a snapshot of the latest stable release. All development should be done in dedicated branches. Do not submit PRs against the master branch. They will be closed.
 - All pull requests should be sent to the `development` branch or the appropriate LTS branch (`releases/v{version}`).
-- It's OK to have multiple small commits as you work on the PR - GitHub will automatically squash it before merging.
+- It's OK to have multiple commits as you work on the PR as long as they are meaningful and related to the PR.
 - Make sure all local tests pass before submitting the merge.
 - Please make sure all your pull requests have companion tests.
-- Please link the Jira issue in your PR title when sending the final PR
 
 ## Security Vulnerabilities
 
-If you discover a security vulnerability, please send an email to the Ortus security team at [security@ortussolutions.com](mailto:security@ortussolutions.com?subject=security) and make sure you report it to the `#security` channel in our Box Team Slack Channel. All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability, please send an email to the developer directly at [dave@angrysam.com](mailto:dave@angrysam.com).
 
 ## Development Setup
 
@@ -67,7 +60,7 @@ Please make sure your code runs on the following CFML Engines:
 
 - Lucee 5+
 - Adobe ColdFusion 2023+
-- BoxLang 1+
+- BoxLang 1+  (CFML compatible)
 
 ## Coding Styles & Formatting
 
@@ -85,22 +78,10 @@ We recommend that anytime you hack on the core you start the formatter watcher (
 
 You can also see the Ortus Coding Standards you must follow here: https://github.com/Ortus-Solutions/coding-standards.
 
-## CFC Docs With DocBox
-
-All CFCs are self-documenting and we leverage [DocBox](https://docbox.ortusbooks.com/) to document the entire software.  All functions must be properly documented using the DocBox syntax: https://docbox.ortusbooks.com/getting-started/annotating-your-code
-
-
-## Financial Contributions
-
-You can support ColdBox and all of our Open Source initiatives at Ortus Solutions by becoming a patreon.  You can also get lots of goodies and services depending on the level of contributions.
-
-- [Become a backer or sponsor on Patreon](https://www.patreon.com/ortussolutions)
-- [One-time donations via PayPal](https://www.paypal.com/paypalme/ortussolutions)
 
 ## Contributors
 
 Thank you to all the people who have already contributed to OriginGuard! We :heart: :heart: :heart: love you!
-
 
 <a href = "https://github.com/homestar9/originguard/graphs/contributors">
   <img src = "https://contrib.rocks/image?repo=homestar9/originguard" alt = "OriginGuard contributors"/>

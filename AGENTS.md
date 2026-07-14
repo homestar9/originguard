@@ -21,6 +21,10 @@ If you are about to append a paragraph to this file, you are almost certainly in
 
 Lucee 5+, Adobe ColdFusion 2023+, BoxLang 1+. Code must run on all three. See **Cross-engine** below.
 
+This module ships only CFML source (no native `.bx` code), so BoxLang is supported through the
+CFML-compatibility layer: the `boxlang-cfml` server boots BoxLang and installs `bx-compat-cfml`.
+There is no native-BoxLang engine here (`start:boxlang-cfml`, not `start:boxlang`).
+
 ## Directory layout
 
 | Path | Purpose |
@@ -67,7 +71,7 @@ harness loads the module under development without a separate install.
 box run-script install:dependencies   # module + test-harness dependencies
 
 box run-script start:lucee5           # also: start:lucee6, start:2023, start:2025 (Adobe CF),
-                                      #       start:boxlang, start:boxlang-cfml
+                                      #       start:boxlang-cfml
 box run-script stop:lucee5            # port 60299 for every engine
 box run-script logs:lucee5
 
